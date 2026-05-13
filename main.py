@@ -1,16 +1,19 @@
 import numpy as np
 import matplotlib.pyplot as plt
+
 from core.config_loader import PhysicalConfig
-from core.components import ReactionWheel, DCMotor # Assicurati che DCMotor sia in components.py
+from core.components import ReactionWheel, DCMotor
 from core.plant import ReactionWheelPendulum
+from core.simulation_engine import SimulationEngine
+
 
 def main():
-    
+
     config = PhysicalConfig.from_yaml("config/params.yaml")
 
     my_wheel = ReactionWheel(
-        mass=config.wheel.m,    
-        radius=config.wheel.r, 
+        mass=config.wheel.m,
+        radius=config.wheel.r,
         friction=config.wheel.b
     )
 
@@ -20,48 +23,45 @@ def main():
         R_a=config.motor.R_a
     )
 
-    
     pendulum = ReactionWheelPendulum(config, my_wheel, my_motor)
 
-    # --- SIMULATION ---
-    dt = 0.01          # Step temporale (10ms, tipico per STM32)
-    t_end = 5.0        # Simula per 5 secondi
-    t_steps = np.arange(0, t_end, dt)
-    
-    # Stato iniziale: [theta, th_dot, phi, ph_dot]
-    # Iniziamo con il pendolo leggermente fuori asse (0.1 rad)
-    x = np.array([0.1, 0.0, 0.0, 0.0])
-    
-    history = []
+    sim = SimulationEngine(
+        plant=pendulum,
+        dt=0.01,
+        t_end=5.0
+    )
 
-    print(f"Inizio simulazione con Ip: {pendulum.I_p:.5f} e Iw: {my_wheel.inertia:.5f}")
+    x0 = np.array([0.1, 0.0, 0.0, 0.0])
 
-    for t in t_steps:
-        # zero tension
-        V_a = 0.0 
-        
-        # save actual state
-        history.append(x.copy())
-        
-        # RK4
-        k1 = pendulum.dynamics(x, V_a)
-        k2 = pendulum.dynamics(x + 0.5 * dt * k1, V_a)
-        k3 = pendulum.dynamics(x + 0.5 * dt * k2, V_a)
-        k4 = pendulum.dynamics(x + dt * k3, V_a)
-        
-        x = x + (dt / 6.0) * (k1 + 2*k2 + 2*k3 + k4)
+    print(
+        f"Inizio simulazione con "
+        f"Ip: {pendulum.I_p:.5f} "
+        f"e Iw: {my_wheel.inertia:.5f}"
+    )
 
-    # visualizing
-    history = np.array(history)
+    # zero voltage input
+    def input_function(t, x):
+        return 0.0
+
+    t_steps, history = sim.run(x0, input_function)
+
+    # visualization
     plt.figure(figsize=(10, 6))
-    plt.plot(t_steps, history[:, 0], label='Theta (Angolo Pendolo)')
-    plt.plot(t_steps, history[:, 2], label='Phi (Angolo Ruota)')
+
+    plt.plot(t_steps, history[:, 0],
+             label='Theta (Angolo Pendolo)')
+
+    plt.plot(t_steps, history[:, 2],
+             label='Phi (Angolo Ruota)')
+
     plt.xlabel('Tempo [s]')
     plt.ylabel('Angolo [rad]')
-    plt.title('Simulazione Pendolo Non Controllato (Caduta Libera)')
+    plt.title('Simulazione Pendolo Non Controllato')
     plt.legend()
     plt.grid(True)
+
     plt.show()
+
 
 if __name__ == "__main__":
     main()
