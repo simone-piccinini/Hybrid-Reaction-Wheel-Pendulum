@@ -429,3 +429,80 @@ class GPPosterior:
 
     def __len__(self) -> int:
         return self.mean.shape[0]
+
+
+@dataclass(frozen=True, eq=False)
+class SimulationResult:
+    """Output of one closed-loop rollout (``data_contracts.md`` §3).
+
+    Produced by ``SimulationEngine.run``; consumed by ``ObjectiveFunction`` and
+    ``metrics/``. All time series share the horizon ``T`` along axis 0, and the
+    state/input/output widths must match the ``config`` that produced the run
+    (``n_x``, ``n_u``, ``n_y``). Arrays are read-only float64 (determinism, §6).
+
+    If ``diverged`` is ``True`` the pendulum fell / the state blew up; the
+    ``ObjectiveFunction`` then assigns a large *finite* penalty rather than
+    ``inf``/``nan`` (``data_contracts.md`` §3, ``numerical_standards.md`` §7).
+    """
+
+    time: np.ndarray
+    true_states: np.ndarray
+    estimated_states: np.ndarray
+    controls: np.ndarray
+    measurements: np.ndarray
+    seed: int
+    diverged: bool
+    config: LQGConfig
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.config, LQGConfig):
+            raise TypeError("config must be an LQGConfig")
+        if isinstance(self.seed, bool) or not isinstance(self.seed, (int, np.integer)):
+            raise TypeError("seed must be an integer")
+        if not isinstance(self.diverged, (bool, np.bool_)):
+            raise TypeError("diverged must be a bool")
+
+        time = np.array(self.time, dtype=np.float64)
+        if time.ndim != 1 or time.shape[0] < 1:
+            raise ValueError(f"time must be 1-D with T>=1, got {time.shape}")
+        horizon = time.shape[0]
+        n_x, n_u, n_y = self.config.n_x, self.config.n_u, self.config.n_y
+
+        expected = {
+            "true_states": (horizon, n_x),
+            "estimated_states": (horizon, n_x),
+            "controls": (horizon, n_u),
+            "measurements": (horizon, n_y),
+        }
+        arrays = {"time": time}
+        for name, shape in expected.items():
+            arr = np.array(getattr(self, name), dtype=np.float64)
+            if arr.shape != shape:
+                raise ValueError(f"{name} must have shape {shape}, got {arr.shape}")
+            arrays[name] = arr
+
+        for name, arr in arrays.items():
+            arr.flags.writeable = False
+            object.__setattr__(self, name, arr)
+        object.__setattr__(self, "seed", int(self.seed))
+        object.__setattr__(self, "diverged", bool(self.diverged))
+
+    @property
+    def horizon(self) -> int:
+        """Number of time steps ``T``."""
+        return self.time.shape[0]
+
+    @property
+    def n_x(self) -> int:
+        """State dimension (from ``config``)."""
+        return self.config.n_x
+
+    @property
+    def n_u(self) -> int:
+        """Input dimension (from ``config``)."""
+        return self.config.n_u
+
+    @property
+    def n_y(self) -> int:
+        """Output dimension (from ``config``)."""
+        return self.config.n_y
