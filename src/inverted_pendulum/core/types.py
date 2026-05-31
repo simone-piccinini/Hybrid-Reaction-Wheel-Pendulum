@@ -231,3 +231,102 @@ class LQGConfig:
         )
 
     __hash__ = None  # mutable-by-value semantics; not hashable
+
+
+@dataclass(frozen=True, eq=False)
+class SearchSpace:
+    """Bounded domain for the Bayesian-optimisation outer loop (``data_contracts.md`` §2).
+
+    Operates in the **search coordinates** the GP consumes — the same coordinates
+    :meth:`LQGConfig.to_vector` emits, i.e. log-space for the dimensions flagged in
+    ``log_scale``. The bounds are therefore given in those coordinates (log-values
+    for log-scale dims); ``sample`` and ``clip`` work directly on this box, so the
+    contract "every θ entering the GP/acquisition lies within these bounds" is
+    expressed in the kernel's own coordinates (``data_contracts.md`` §4). ``log_scale``
+    records which dimensions are logarithmic so a point can be mapped back to
+    natural units with :meth:`to_natural`. Positive-only quantities (variances,
+    cost weights) use ``log_scale = True``.
+
+    Fields (``notation.md`` §6): ``dimension`` is ``d``; ``lower_bounds`` and
+    ``upper_bounds`` are length ``d``; ``log_scale`` is a length-``d`` bool mask
+    aligned with the packing order of :meth:`LQGConfig.to_vector`.
+    """
+
+    dimension: int
+    lower_bounds: np.ndarray
+    upper_bounds: np.ndarray
+    log_scale: np.ndarray
+
+    def __post_init__(self) -> None:
+        d = int(self.dimension)
+        lower = np.array(self.lower_bounds, dtype=np.float64)
+        upper = np.array(self.upper_bounds, dtype=np.float64)
+        log_scale = np.array(self.log_scale, dtype=bool)
+        for name, arr in (("lower_bounds", lower), ("upper_bounds", upper), ("log_scale", log_scale)):
+            if arr.ndim != 1 or arr.shape[0] != d:
+                raise ValueError(f"{name} must be 1-D of length dimension={d}, got {arr.shape}")
+        if np.any(lower >= upper):
+            raise ValueError("each lower bound must be strictly less than its upper bound")
+        for arr in (lower, upper, log_scale):
+            arr.flags.writeable = False
+        object.__setattr__(self, "dimension", d)
+        object.__setattr__(self, "lower_bounds", lower)
+        object.__setattr__(self, "upper_bounds", upper)
+        object.__setattr__(self, "log_scale", log_scale)
+
+    @property
+    def width(self) -> np.ndarray:
+        """Per-dimension box width ``upper − lower``."""
+        return self.upper_bounds - self.lower_bounds
+
+    def sample(self, n: int, rng: np.random.Generator) -> np.ndarray:
+        """Draw ``n`` points by Latin-hypercube sampling within the box.
+
+        Stratified per dimension: each of the ``n`` strata ``[i/n, (i+1)/n)`` is
+        sampled once and the strata are independently permuted across rows, then
+        scaled to ``[lower, upper]`` (``data_contracts.md`` §2). Reproducible from
+        the seeded ``rng`` (determinism contract §6).
+
+        Returns
+        -------
+        (n, d) ndarray
+        """
+        if n < 1:
+            raise ValueError("n must be >= 1")
+        d = self.dimension
+        unit = np.empty((n, d), dtype=np.float64)
+        for j in range(d):
+            strata = rng.permutation(n)
+            unit[:, j] = (strata + rng.random(n)) / n
+        return self.lower_bounds + unit * self.width
+
+    def clip(self, theta) -> np.ndarray:
+        """Project a point back into the box (``data_contracts.md`` §2)."""
+        theta = np.asarray(theta, dtype=np.float64)
+        if theta.shape != (self.dimension,):
+            raise ValueError(f"theta must have shape ({self.dimension},), got {theta.shape}")
+        return np.clip(theta, self.lower_bounds, self.upper_bounds)
+
+    def contains(self, theta, tol: float = ATOL) -> bool:
+        """True if ``theta`` lies within the box (within ``tol``)."""
+        theta = np.asarray(theta, dtype=np.float64)
+        if theta.shape != (self.dimension,):
+            return False
+        return bool(
+            np.all(theta >= self.lower_bounds - tol)
+            and np.all(theta <= self.upper_bounds + tol)
+        )
+
+    def to_natural(self, theta) -> np.ndarray:
+        """Map a search-coordinate point to natural units (``exp`` on log-scale dims).
+
+        Inverse log-transform for the dimensions flagged in ``log_scale``; linear
+        dimensions pass through unchanged. Useful for reporting the discovered
+        weights in physical units.
+        """
+        theta = np.asarray(theta, dtype=np.float64)
+        if theta.shape != (self.dimension,):
+            raise ValueError(f"theta must have shape ({self.dimension},), got {theta.shape}")
+        natural = theta.copy()
+        natural[self.log_scale] = np.exp(theta[self.log_scale])
+        return natural
