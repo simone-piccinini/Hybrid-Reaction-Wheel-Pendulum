@@ -31,3 +31,16 @@ JITTER_MAX: float = 1e-3
 
 COND_WARN: float = 1e12
 """Condition-number threshold above which a warning should be logged."""
+
+# numerical_standards.md §5 — ML-II hyperparameter optimisation
+ML2_MAX_ITER: int = 200
+"""Iteration cap for the ML-II optimiser before returning best-so-far."""
+
+ML2_GRAD_TOL: float = 1e-4
+"""Converged when the gradient ∞-norm ``‖∇ log p‖∞`` falls below this."""
+
+ML2_STEP_TOL: float = 1e-8
+"""Converged when the optimiser step length falls below this."""
+
+ML2_RESTARTS: int = 5
+"""Default number of random restarts (the ML-II objective is non-convex)."""
