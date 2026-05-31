@@ -330,3 +330,102 @@ class SearchSpace:
         natural = theta.copy()
         natural[self.log_scale] = np.exp(theta[self.log_scale])
         return natural
+
+
+class Dataset:
+    """The Bayesian-optimisation observation history 𝒟ₙ (``data_contracts.md`` §4).
+
+    Owned by the ``GaussianProcess``; read-only to the ``BayesianOptimizer``.
+    Holds the evaluated points ``X`` (``n × d``) and their scalar costs ``y``
+    (``n``). ``X`` rows are in SearchSpace / search coordinates (log-space where
+    applicable), consistent with what the kernel consumes. Unlike the other
+    contracts this object is **mutable**: :meth:`append` grows the history.
+    Non-finite targets are rejected so they cannot poison the GP
+    (``numerical_standards.md`` §7).
+    """
+
+    def __init__(self, dim: int) -> None:
+        if dim < 1:
+            raise ValueError("dim must be >= 1")
+        self._dim = int(dim)
+        self._X = np.empty((0, self._dim), dtype=np.float64)
+        self._y = np.empty((0,), dtype=np.float64)
+        self._X.flags.writeable = False
+        self._y.flags.writeable = False
+
+    @property
+    def dim(self) -> int:
+        """Decision-space dimension ``d``."""
+        return self._dim
+
+    @property
+    def X(self) -> np.ndarray:
+        """The ``n × d`` matrix of evaluated points (read-only)."""
+        return self._X
+
+    @property
+    def y(self) -> np.ndarray:
+        """The ``n`` vector of observed costs (read-only)."""
+        return self._y
+
+    def append(self, theta, y) -> None:
+        """Append one observation ``(θ, y)``; rejects non-finite values (§7).
+
+        Raises
+        ------
+        ValueError
+            If ``theta`` has the wrong shape, or ``theta``/``y`` is non-finite.
+        """
+        theta = np.asarray(theta, dtype=np.float64)
+        if theta.shape != (self._dim,):
+            raise ValueError(f"theta must have shape ({self._dim},), got {theta.shape}")
+        if not np.all(np.isfinite(theta)):
+            raise ValueError("theta contains non-finite values")
+        y = float(y)
+        if not np.isfinite(y):
+            raise ValueError("y must be finite (a diverged run maps to a large finite PENALTY)")
+        new_X = np.vstack([self._X, theta.reshape(1, self._dim)])
+        new_y = np.concatenate([self._y, np.array([y], dtype=np.float64)])
+        new_X.flags.writeable = False
+        new_y.flags.writeable = False
+        self._X = new_X
+        self._y = new_y
+
+    def size(self) -> int:
+        """Number of observations ``n`` (``data_contracts.md`` §4)."""
+        return self._X.shape[0]
+
+    def __len__(self) -> int:
+        return self.size()
+
+
+@dataclass(frozen=True, eq=False)
+class GPPosterior:
+    """Predictive distribution from ``GaussianProcess.predict`` (``data_contracts.md`` §5).
+
+    ``mean`` and ``variance`` are length-``m`` (one entry per query point; ``m=1``
+    for a single query). Variance is non-negative: tiny round-off negatives are
+    clipped to ``0``, but a value below ``−ATOL`` is treated as a bug and raises
+    (``numerical_standards.md`` §4).
+    """
+
+    mean: np.ndarray
+    variance: np.ndarray
+
+    def __post_init__(self) -> None:
+        mean = np.array(np.atleast_1d(self.mean), dtype=np.float64)
+        variance = np.array(np.atleast_1d(self.variance), dtype=np.float64)
+        if mean.ndim != 1 or variance.ndim != 1:
+            raise ValueError("mean and variance must be 1-D")
+        if mean.shape != variance.shape:
+            raise ValueError(f"mean {mean.shape} and variance {variance.shape} must match")
+        if np.any(variance < -ATOL):
+            raise ValueError("predictive variance is negative beyond round-off (a bug)")
+        np.maximum(variance, 0.0, out=variance)  # clip round-off negatives to 0
+        mean.flags.writeable = False
+        variance.flags.writeable = False
+        object.__setattr__(self, "mean", mean)
+        object.__setattr__(self, "variance", variance)
+
+    def __len__(self) -> int:
+        return self.mean.shape[0]
