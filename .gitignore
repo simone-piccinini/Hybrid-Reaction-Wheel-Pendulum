@@ -16,3 +16,5 @@ __pycache__/
 # Generated outputs (not for version control)
 results/
 experiments/*/results/
+
+from_last_time.txt
