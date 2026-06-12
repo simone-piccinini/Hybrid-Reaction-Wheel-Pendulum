@@ -77,3 +77,41 @@ def test_lu_solve_matrix_rhs_matches_numpy_solve(rng):
     assert np.allclose(
         linalg.lu_solve_matrix(A, B), npl.solve(A, B), rtol=VALIDATION_RTOL, atol=ATOL
     )
+
+
+def assert_spectra_match(ours, ref):
+    # one-to-one greedy pairing: sorting complex spectra is ill-defined when
+    # conjugate pairs differ by round-off in the real part
+    ours = list(np.asarray(ours, dtype=np.complex128))
+    tol = ATOL + VALIDATION_RTOL * float(np.max(np.abs(ref)))
+    for lam in ref:
+        distances = np.abs(np.asarray(ours) - lam)
+        i = int(np.argmin(distances))
+        assert distances[i] <= tol, f"no match for {lam}: nearest at {distances[i]}"
+        ours.pop(i)
+
+
+@pytest.mark.parametrize("n", [2, 3, 5, 8])
+def test_eigvals_match_numpy(rng, n):
+    A = rng.standard_normal((n, n))
+    assert_spectra_match(linalg.eigvals(A), npl.eigvals(A))
+
+
+def test_eigvals_symmetric_match_numpy(rng):
+    A = rng.standard_normal((6, 6))
+    S = 0.5 * (A + A.T)
+    ours = np.sort(linalg.eigvals(S).real)
+    ref = np.sort(npl.eigvalsh(S))
+    assert np.allclose(ours, ref, rtol=VALIDATION_RTOL, atol=ATOL)
+
+
+def test_eigvals_permutation_matches_numpy():
+    P3 = np.array([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    assert_spectra_match(linalg.eigvals(P3), npl.eigvals(P3))
+
+
+def test_spectral_radius_matches_numpy(rng):
+    A = rng.standard_normal((7, 7))
+    assert linalg.spectral_radius(A) == pytest.approx(
+        float(np.max(np.abs(npl.eigvals(A)))), rel=VALIDATION_RTOL
+    )

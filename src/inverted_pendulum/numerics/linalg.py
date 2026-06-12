@@ -247,3 +247,203 @@ def lu_solve_matrix(M, b) -> np.ndarray:
     "general linear solve (LU)".
     """
     return lu_solve(lu_factor(M), b)
+
+
+# --------------------------------------------------------------------------- #
+# eigenvalues — general real matrices via the shifted-QR algorithm
+# --------------------------------------------------------------------------- #
+# Approved as the general (complex-capable) extension of numerical_standards.md
+# §3's eigen-decomposition row (architecture decision, 2026-05-30): needed for
+# model.md's open-loop instability check and lqr.md's closed-loop unit-circle
+# test. LAPACK's xHSEQR budgets 30 QR sweeps per eigenvalue; matrices here are
+# small, so we are generous.
+EIG_MAX_SWEEPS_PER_EIGENVALUE: int = 100
+
+# After this many sweeps without a deflation, take one ad-hoc ("exceptional")
+# shift to break the cycles on which the Wilkinson shift stalls (e.g.
+# permutation matrices) — the standard LAPACK safeguard.
+_EIG_EXCEPTIONAL_EVERY: int = 10
+
+_MACHINE_EPS: float = float(np.finfo(np.float64).eps)
+
+
+class EigNotConverged(Exception):
+    """Raised when the shifted-QR iteration exhausts its sweep budget."""
+
+
+def _hessenberg(A: np.ndarray) -> np.ndarray:
+    """Householder reduction to upper Hessenberg form (GVL Alg. 7.4.2).
+
+    Returns ``H = Qᵀ A Q`` with ``H[i, j] = 0`` for ``i > j + 1`` and ``Q``
+    orthogonal, so ``H`` has the same eigenvalues as ``A``.
+    """
+    H = A.copy()
+    n = H.shape[0]
+    for k in range(n - 2):
+        x = H[k + 1 :, k]
+        sigma = math.sqrt(float(x @ x))
+        if sigma == 0.0:
+            continue  # column already reduced
+        # v = x − α e₁ with α = −sign(x₀)·‖x‖ avoids cancellation (GVL §5.1.3)
+        alpha = -sigma if x[0] >= 0.0 else sigma
+        v = x.copy()
+        v[0] -= alpha
+        beta = float(v @ v)
+        if beta == 0.0:
+            continue
+        # similarity transform with P = I − (2/β) v vᵀ: H ← P H P
+        w = (2.0 / beta) * (v @ H[k + 1 :, k:])
+        H[k + 1 :, k:] -= np.outer(v, w)
+        u = (2.0 / beta) * (H[:, k + 1 :] @ v)
+        H[:, k + 1 :] -= np.outer(u, v)
+        H[k + 2 :, k] = 0.0  # exact zeros below the subdiagonal
+    return H
+
+
+def _eig2x2(a: complex, b: complex, c: complex, d: complex) -> tuple[complex, complex]:
+    """Both eigenvalues of ``[[a, b], [c, d]]``: ``(a+d)/2 ± √(((a−d)/2)² + bc)``."""
+    mid = 0.5 * (a + d)
+    disc = np.sqrt(np.complex128((0.5 * (a - d)) ** 2 + b * c))
+    return mid + disc, mid - disc
+
+
+def _wilkinson_shift(a: complex, b: complex, c: complex, d: complex) -> complex:
+    """The eigenvalue of the trailing 2×2 block closer to ``d`` (GVL §7.5.1)."""
+    mu1, mu2 = _eig2x2(a, b, c, d)
+    return mu1 if abs(mu1 - d) <= abs(mu2 - d) else mu2
+
+
+def _givens(f: complex, g: complex) -> tuple[float, complex]:
+    """Unitary ``G = [[c, s], [−s̄, c]]`` (``c`` real ≥ 0) with ``G[f, g]ᵀ = [r, 0]ᵀ``.
+
+    The complex Givens rotation in LAPACK's ``clartg`` convention (GVL §5.1.8).
+    """
+    if g == 0.0:
+        return 1.0, 0.0 + 0.0j
+    if f == 0.0:
+        return 0.0, complex(np.conj(g) / abs(g))
+    denom = math.hypot(abs(f), abs(g))
+    c = abs(f) / denom
+    s = (f / abs(f)) * np.conj(g) / denom
+    return c, complex(s)
+
+
+def _qr_sweep(H: np.ndarray, lo: int, hi: int, mu: complex) -> None:
+    """One shifted QR step ``H ← R Q + μI`` on the active block ``lo..hi``.
+
+    ``Q R = H − μI`` is formed implicitly with Givens rotations on the
+    Hessenberg block (GVL §7.5, "Hessenberg QR step"); the similarity
+    transform preserves eigenvalues and the Hessenberg structure.
+    """
+    T = H[lo : hi + 1, lo : hi + 1].copy()
+    m = T.shape[0]
+    T[np.diag_indices(m)] -= mu
+    rotations: list[tuple[float, complex]] = []
+    for k in range(m - 1):
+        c, s = _givens(T[k, k], T[k + 1, k])
+        rotations.append((c, s))
+        row_k = c * T[k, :] + s * T[k + 1, :]
+        row_k1 = -np.conj(s) * T[k, :] + c * T[k + 1, :]
+        T[k, :], T[k + 1, :] = row_k, row_k1
+    for k, (c, s) in enumerate(rotations):  # T ← T G₀ᴴ G₁ᴴ … = R Q
+        col_k = c * T[:, k] + np.conj(s) * T[:, k + 1]
+        col_k1 = -s * T[:, k] + c * T[:, k + 1]
+        T[:, k], T[:, k + 1] = col_k, col_k1
+    T[np.diag_indices(m)] += mu
+    H[lo : hi + 1, lo : hi + 1] = T
+
+
+def eigvals(M, max_sweeps: int | None = None) -> np.ndarray:
+    """All eigenvalues of a real square matrix, in no particular order.
+
+    The practical QR algorithm (GVL §7.5): Householder reduction to upper
+    Hessenberg form, then Wilkinson-shifted QR iterations in complex
+    arithmetic with deflation — complex conjugate pairs emerge through the
+    complex shift, avoiding real-Schur 2×2 bookkeeping. Trailing 1×1 and 2×2
+    blocks deflate directly. For defective (repeated, non-diagonalisable)
+    eigenvalues the attainable accuracy degrades to ~√ε — inherent to the
+    problem, not the algorithm.
+
+    Parameters
+    ----------
+    M : (n, n) array_like
+        Real square matrix with finite entries.
+    max_sweeps : int, optional
+        Total QR-sweep budget (default ``EIG_MAX_SWEEPS_PER_EIGENVALUE · n``).
+
+    Returns
+    -------
+    (n,) ndarray of complex128
+        The eigenvalues (complex even when all are real).
+
+    Raises
+    ------
+    ValueError
+        If ``M`` is not square or contains non-finite entries.
+    EigNotConverged
+        If the sweep budget is exhausted before full deflation.
+    """
+    A = _as_square(M)
+    if not np.all(np.isfinite(A)):
+        raise ValueError("eigvals requires finite entries")
+    n = A.shape[0]
+    if n == 0:
+        return np.empty(0, dtype=np.complex128)
+    budget = EIG_MAX_SWEEPS_PER_EIGENVALUE * n if max_sweeps is None else max_sweeps
+    H = _hessenberg(A).astype(np.complex128)
+    scale = float(np.max(np.abs(H))) or 1.0  # negligibility floor for zero rows
+    eig = np.empty(n, dtype=np.complex128)
+    hi = n - 1
+    sweeps_total = 0
+    sweeps_since_deflation = 0
+
+    def negligible(i: int) -> bool:
+        # standard relative criterion: |h_{i,i-1}| ≤ ε(|h_{i-1,i-1}| + |h_{ii}|)
+        tol = _MACHINE_EPS * (abs(H[i - 1, i - 1]) + abs(H[i, i]))
+        return abs(H[i, i - 1]) <= (tol if tol > 0.0 else _MACHINE_EPS * scale)
+
+    while hi >= 0:
+        if hi == 0:
+            eig[0] = H[0, 0]
+            break
+        if negligible(hi):  # 1×1 deflation at the bottom
+            H[hi, hi - 1] = 0.0
+            eig[hi] = H[hi, hi]
+            hi -= 1
+            sweeps_since_deflation = 0
+            continue
+        lo = hi
+        while lo > 0 and not negligible(lo):
+            lo -= 1
+        if lo > 0:
+            H[lo, lo - 1] = 0.0
+        if hi - lo == 1:  # 2×2 deflation in closed form
+            eig[lo], eig[hi] = _eig2x2(H[lo, lo], H[lo, hi], H[hi, lo], H[hi, hi])
+            hi = lo - 1
+            sweeps_since_deflation = 0
+            continue
+        if sweeps_total >= budget:
+            raise EigNotConverged(
+                f"shifted QR did not deflate within {budget} sweeps"
+            )
+        sweeps_total += 1
+        sweeps_since_deflation += 1
+        if sweeps_since_deflation % _EIG_EXCEPTIONAL_EVERY == 0:
+            mu = H[hi, hi] + abs(H[hi, hi - 1])  # exceptional shift
+        else:
+            mu = _wilkinson_shift(
+                H[hi - 1, hi - 1], H[hi - 1, hi], H[hi, hi - 1], H[hi, hi]
+            )
+        _qr_sweep(H, lo, hi, mu)
+    return eig
+
+
+def spectral_radius(M, max_sweeps: int | None = None) -> float:
+    """``ρ(M) = max |λᵢ|`` over the eigenvalues of ``M``.
+
+    The quantity in lqr.md's closed-loop caution (all eigenvalues of
+    ``A_d − B_d K`` strictly inside the unit circle ⇔ ``ρ < 1``) and model.md's
+    open-loop instability check.
+    """
+    e = eigvals(M, max_sweeps=max_sweeps)
+    return float(np.max(np.abs(e))) if e.size else 0.0
