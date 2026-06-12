@@ -25,6 +25,7 @@ All matrices are NumPy 2-D arrays of dtype `float64`; all vectors are 1-D `float
 |---|---|---|---|
 | $\theta_p$ | pendulum angle from upright | `theta_p` | rad |
 | $\dot\theta_p$ | pendulum angular velocity | `theta_p_dot` | rad/s |
+| $\theta_w$ ($\phi$) | reaction-wheel angle (rel. to pendulum) | `theta_w` | rad |
 | $\dot\theta_w$ | reaction-wheel angular velocity | `theta_w_dot` | rad/s |
 | $m_p$ | pendulum mass | `pendulum_mass` | kg |
 | $\ell_p$ | pendulum length (pivot→CoM) | `pendulum_length` | m |
@@ -62,7 +63,7 @@ All matrices are NumPy 2-D arrays of dtype `float64`; all vectors are 1-D `float
 | $\Delta t$ | sample / integration step | `dt` | s |
 | $n_x, n_u, n_y$ | dimensions | `n_x`, `n_u`, `n_y` | int |
 
-Convention: `x` is the **true** state; `x_hat` is the Kalman **estimate**. The default state ordering is `x = [theta_p, theta_p_dot, theta_w_dot]` ($n_x = 3$).
+Convention: `x` is the **true** state; `x_hat` is the Kalman **estimate**. The default state ordering is `x = [theta_p, theta_p_dot, theta_w, theta_w_dot]` ($n_x = 4$), matching model.md's $[\theta, \dot\theta, \phi, \dot\phi]$: pendulum angle, pendulum rate, wheel angle, wheel rate. The wheel angle `theta_w` ($\phi$) is uncontrollable (column 3 of $A$ is zero) but is retained in the state for tracking.
 
 ---
 
