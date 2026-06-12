@@ -175,3 +175,95 @@ def test_non_square_raises():
         linalg.cholesky(rect)
     with pytest.raises(ValueError):
         linalg.lu_factor(rect)
+    with pytest.raises(ValueError):
+        linalg.eigvals(rect)
+
+
+# --------------------------------------------------------------------------- #
+# eigvals / spectral_radius (shifted QR)
+# --------------------------------------------------------------------------- #
+def sorted_eigs(values) -> np.ndarray:
+    return np.sort_complex(np.asarray(values, dtype=np.complex128))
+
+
+def test_eigvals_diagonal():
+    d = np.array([3.0, -1.0, 0.5, 7.0])
+    np.testing.assert_allclose(
+        sorted_eigs(linalg.eigvals(np.diag(d))), sorted_eigs(d), atol=1e-12
+    )
+
+
+def test_eigvals_triangular(rng):
+    T = np.triu(rng.standard_normal((5, 5)))
+    np.testing.assert_allclose(
+        sorted_eigs(linalg.eigvals(T)), sorted_eigs(np.diag(T)), atol=1e-10
+    )
+
+
+def test_eigvals_rotation_complex_pair():
+    # planar rotation by ψ: eigenvalues cos ψ ± i sin ψ
+    psi = 0.7
+    R = np.array(
+        [[np.cos(psi), -np.sin(psi)], [np.sin(psi), np.cos(psi)]]
+    )
+    expected = [np.cos(psi) + 1j * np.sin(psi), np.cos(psi) - 1j * np.sin(psi)]
+    np.testing.assert_allclose(
+        sorted_eigs(linalg.eigvals(R)), sorted_eigs(expected), atol=1e-12
+    )
+
+
+def test_eigvals_companion_matrix():
+    # companion of (λ−1)(λ−2)(λ−3) = λ³ − 6λ² + 11λ − 6
+    C = np.array([[6.0, -11.0, 6.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    np.testing.assert_allclose(
+        sorted_eigs(linalg.eigvals(C)), sorted_eigs([1.0, 2.0, 3.0]), atol=1e-9
+    )
+
+
+def test_eigvals_cyclic_permutation_needs_exceptional_shift():
+    # the 3-cycle permutation: eigenvalues are the cube roots of unity; the
+    # plain Wilkinson shift stalls on it, exercising the exceptional shift
+    P3 = np.array([[0.0, 0.0, 1.0], [1.0, 0.0, 0.0], [0.0, 1.0, 0.0]])
+    expected = [np.exp(2j * np.pi * k / 3) for k in range(3)]
+    np.testing.assert_allclose(
+        sorted_eigs(linalg.eigvals(P3)), sorted_eigs(expected), atol=1e-10
+    )
+
+
+def test_eigvals_symmetric_are_real(rng):
+    M = random_spd(5, rng)
+    e = linalg.eigvals(M)
+    assert np.max(np.abs(e.imag)) < 1e-9
+    assert np.all(e.real > 0.0)  # SPD: strictly positive spectrum
+
+
+@pytest.mark.parametrize("n", [1, 2, 3, 6])
+def test_eigvals_sum_matches_trace(rng, n):
+    A = rng.standard_normal((n, n))
+    e = linalg.eigvals(A)
+    assert e.shape == (n,) and e.dtype == np.complex128
+    np.testing.assert_allclose(np.sum(e), np.trace(A), rtol=1e-9, atol=1e-9)
+
+
+def test_eigvals_is_deterministic(rng):
+    A = rng.standard_normal((5, 5))
+    np.testing.assert_array_equal(linalg.eigvals(A), linalg.eigvals(A))
+
+
+def test_eigvals_rejects_nonfinite():
+    A = np.array([[1.0, np.nan], [0.0, 1.0]])
+    with pytest.raises(ValueError):
+        linalg.eigvals(A)
+
+
+def test_eigvals_budget_exhaustion_raises(rng):
+    A = rng.standard_normal((4, 4))
+    with pytest.raises(linalg.EigNotConverged):
+        linalg.eigvals(A, max_sweeps=0)
+
+
+def test_spectral_radius_known_values():
+    assert linalg.spectral_radius(0.5 * np.eye(3)) == pytest.approx(0.5)
+    psi = 1.1  # rotations are isometries: ρ = 1
+    R = np.array([[np.cos(psi), -np.sin(psi)], [np.sin(psi), np.cos(psi)]])
+    assert linalg.spectral_radius(R) == pytest.approx(1.0, abs=1e-12)
