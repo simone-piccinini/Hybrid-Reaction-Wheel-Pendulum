@@ -146,6 +146,23 @@ class GaussianProcess:
             raise RuntimeError("the GP must be fitted before use")
 
     @property
+    def train_inputs(self) -> np.ndarray:
+        """The conditioning inputs ``X`` (read-only copy)."""
+        self._require_fitted()
+        return self._X_train.copy()
+
+    @property
+    def observed_targets(self) -> np.ndarray:
+        """The observed costs ``y`` in **raw** units (read-only copy).
+
+        Acquisitions need the incumbent — the best cost seen so far — in the
+        same units predictions are returned in (Expected Improvement,
+        ``data_contracts.md`` §8).
+        """
+        self._require_fitted()
+        return self._y_mean + self._y_std * self._y_standardized
+
+    @property
     def n_train(self) -> int:
         """Number of conditioning observations."""
         self._require_fitted()
