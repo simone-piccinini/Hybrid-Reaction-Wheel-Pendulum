@@ -1,0 +1,13 @@
+# Development dependencies — reference libraries used ONLY by tests/validation/
+# to cross-check the hand-written numerics. Nothing under src/ imports these
+# (AGENTS.md §3, numerical_standards.md §3).
+#
+# Install with:  pip install -r requirements.txt -r requirements-dev.txt
+# Test with:     PYTHONPATH=src python -m pytest tests/ -q
+
+-r requirements.txt
+
+pytest>=8.0
+scipy>=1.13        # solve_discrete_are, expm, signal, solve_ivp, linalg refs
+scikit-learn>=1.5  # GaussianProcessRegressor reference for the GP
+filterpy>=1.4      # KalmanFilter reference

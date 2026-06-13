@@ -60,12 +60,33 @@ cover the [hand-written numerics](docs/guides/numerics_from_scratch.md),
 [running experiments](docs/guides/running_experiments.md), and an empirical
 [comparison of the acquisition functions](docs/guides/experiments.md).
 
+## Installation
+
+No build step — just install the dependencies (a virtual environment is
+recommended). Runtime needs only NumPy, PyYAML and matplotlib:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt          # runtime
+pip install -r requirements-dev.txt      # + reference libs, to run the tests
+```
+
 ## Running an experiment
 
 Tests and scripts run with `PYTHONPATH=src` (there is no installed package yet).
 
 ```bash
 PYTHONPATH=src python scripts/run_experiment.py configs/default.yaml -o results/run01
+```
+
+The default config uses Entropy Search at full budget and takes a few minutes;
+for a quick first run, try `--no-plots` or an Expected-Improvement config. The
+companion analysis scripts are fast:
+
+```bash
+PYTHONPATH=src python scripts/frequency_analysis.py -o results/bode          # Bode diagrams
+PYTHONPATH=src python scripts/step_response.py      -o results/time_response # step / transient
+PYTHONPATH=src python scripts/compare_acquisitions.py --json results/cmp.json
 ```
 
 This tunes the LQG weights on the configured plant and writes a full,
