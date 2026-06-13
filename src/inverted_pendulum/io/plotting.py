@@ -81,6 +81,33 @@ def plot_convergence(y_history, *, title: str = "Bayesian-optimisation progress"
     return fig
 
 
+def plot_bode(omega, magnitude_db, phase_deg, *, title: str = "Bode diagram",
+              label: str | None = None):
+    """Plot a Bode diagram: magnitude (dB) and phase (deg) vs log-frequency.
+
+    Takes the plain arrays produced by
+    ``dynamics.frequency_response.bode`` (the computation layer owns the
+    transfer-function maths; ``io`` only draws). Returns the two-row ``Figure``.
+    """
+    import matplotlib.pyplot as plt
+
+    omega = np.asarray(omega, dtype=np.float64)
+    fig, (ax_mag, ax_phase) = plt.subplots(2, 1, figsize=(9, 6), sharex=True)
+    ax_mag.semilogx(omega, magnitude_db, label=label)
+    ax_mag.set_ylabel("magnitude (dB)")
+    ax_mag.axhline(0.0, color="0.7", linewidth=0.8, zorder=0)
+    ax_mag.grid(True, which="both", linewidth=0.3)
+    if label is not None:
+        ax_mag.legend(loc="best", fontsize=8)
+    ax_phase.semilogx(omega, phase_deg)
+    ax_phase.set_ylabel("phase (deg)")
+    ax_phase.set_xlabel(r"angular frequency $\omega$ (rad/s)")
+    ax_phase.grid(True, which="both", linewidth=0.3)
+    fig.suptitle(title)
+    fig.tight_layout()
+    return fig
+
+
 def save_figure(figure, path) -> Path:
     """Save a figure to ``path`` (parent directories created) and return it."""
     path = Path(path)

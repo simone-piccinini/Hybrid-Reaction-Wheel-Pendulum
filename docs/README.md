@@ -20,6 +20,9 @@ start with the **codebase overview**, then dip into theory or guides as needed.
 - [Bayesian Optimisation Walkthrough](guides/bayesian_optimization_walkthrough.md)
   — a reading guide to the `optimization/` layer: GP surrogate, ML-II, kernels,
   acquisitions, and the outer loop.
+- [Frequency Analysis](guides/frequency_analysis.md) — from the state-space form
+  to the Bode diagram via the Laplace transfer function `G(s)=C(sI−A)⁻¹B+D`,
+  with the derivation and the reading of the plant's poles.
 - [Experiments](guides/experiments.md) — an empirical comparison of the three
   acquisition functions, reproducible from `scripts/compare_acquisitions.py`.
 

@@ -50,3 +50,13 @@ def test_save_figure_writes_png(tmp_path):
     path = save_figure(fig, tmp_path / "sub" / "conv.png")
     assert path.is_file()
     assert path.stat().st_size > 0
+
+
+def test_plot_bode_returns_two_axes():
+    from inverted_pendulum.io.plotting import plot_bode
+
+    omega = np.logspace(-2, 2, 50)
+    magnitude_db = -20.0 * np.log10(omega)
+    phase_deg = -90.0 * np.ones_like(omega)
+    fig = plot_bode(omega, magnitude_db, phase_deg, title="test", label="ch")
+    assert len(fig.axes) == 2  # magnitude and phase rows
