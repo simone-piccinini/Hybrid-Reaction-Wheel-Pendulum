@@ -33,9 +33,12 @@ fallen, so the rollout stops early when ``|theta_p|`` exceeds
 finite, returning the truncated arrays with ``diverged=True``
 (``data_contracts.md`` §3; the ObjectiveFunction maps that to the finite
 PENALTY, ``numerical_standards.md`` §7). Controller/filter *design* failures
-(``UnstableClosedLoopError``, ``RiccatiNotConverged``) propagate to the
-caller — they happen before any physics runs, and mapping them to a penalty
-is likewise the optimisation layer's decision.
+(``UnstableClosedLoopError`` from an unstabilising gain,
+``RiccatiNotConverged`` from a non-convergent sweep) are caught here and
+returned as a one-sample ``diverged=True`` result, so the optimisation layer
+sees the stack as a pure black box reached only through ``engine.run`` →
+``objective.evaluate`` (``dependency_rules.md`` §4) — it never has to know
+about, or import, the control/estimation exception types.
 """
 
 from __future__ import annotations
@@ -45,11 +48,12 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ..control.lqr_controller import LQRController
+from ..control.lqr_controller import LQRController, UnstableClosedLoopError
 from ..core.types import LQGConfig, SimulationResult
 from ..dynamics.linearized_model import LinearizedPlantModel
 from ..dynamics.nonlinear_model import NonlinearPlantModel
 from ..estimation.kalman_filter import KalmanFilter
+from ..numerics.riccati import RiccatiNotConverged
 from ..physical.pendulum import ReactionWheelPendulum
 from .disturbances import Disturbances
 
@@ -173,10 +177,16 @@ class SimulationEngine:
         used_seed = self.seed if seed is None else int(seed)
         rng = np.random.default_rng(used_seed)  # the single threaded generator
 
-        controller = LQRController.from_config(linear.discrete, config)
-        kalman = KalmanFilter.from_config(
-            linear.discrete, config, x0=self.initial_state
-        )
+        # a config that cannot yield a stabilising gain (or whose Riccati sweep
+        # does not converge) is a failed run, not an exception the optimiser
+        # must handle: report it as diverged (dependency_rules.md §4).
+        try:
+            controller = LQRController.from_config(linear.discrete, config)
+            kalman = KalmanFilter.from_config(
+                linear.discrete, config, x0=self.initial_state
+            )
+        except (UnstableClosedLoopError, RiccatiNotConverged):
+            return self._diverged_result(config, used_seed)
 
         horizon = self.horizon
         time = self.dt * np.arange(horizon)
@@ -215,5 +225,24 @@ class SimulationEngine:
             measurements=measurements[:samples],
             seed=used_seed,
             diverged=diverged,
+            config=config,
+        )
+
+    def _diverged_result(self, config: LQGConfig, used_seed: int) -> SimulationResult:
+        """A one-sample ``diverged=True`` result for a failed controller design.
+
+        The single sample sits at the nominal initial state (no physics ran);
+        the ObjectiveFunction maps ``diverged`` to the finite PENALTY.
+        """
+        n_x, n_u, n_y = self._linear.n_x, self._linear.n_u, self._linear.n_y
+        x0 = self.initial_state.reshape(1, n_x)
+        return SimulationResult(
+            time=np.zeros(1),
+            true_states=x0,
+            estimated_states=x0,
+            controls=np.zeros((1, n_u)),
+            measurements=np.zeros((1, n_y)),
+            seed=used_seed,
+            diverged=True,
             config=config,
         )

@@ -160,13 +160,22 @@ def test_saturated_motor_falls_dynamically():
     assert result.time.shape[0] == result.horizon
 
 
-def test_design_failures_propagate():
-    # a barely-weighted config makes the DARE value iteration exceed its cap:
-    # design errors are the optimisation layer's to map to a penalty
-    weak = make_config(Q_lqr=np.diag([1e-2, 1e-2, 1e-2, 1e-2]),
-                       R_lqr=1e3 * np.eye(1))
-    with pytest.raises(RiccatiNotConverged):
-        make_engine().run(weak)
+def test_design_failure_becomes_a_diverged_result(monkeypatch):
+    # a controller-design failure is reported as a one-sample diverged result,
+    # not raised — the optimiser sees the stack as a black box (dependency
+    # rules §4). Force the failure deterministically by stubbing the gain
+    # design to raise.
+    from inverted_pendulum.control.lqr_controller import LQRController
+    from inverted_pendulum.simulation import simulator as sim_module
+
+    def boom(*args, **kwargs):
+        raise RiccatiNotConverged("forced for the test")
+
+    monkeypatch.setattr(sim_module.LQRController, "from_config", boom)
+    result = make_engine().run(make_config())
+    assert result.diverged
+    assert result.horizon == 1
+    np.testing.assert_array_equal(result.true_states[0], make_engine().initial_state)
 
 
 # --------------------------------------------------------------------------- #
