@@ -49,6 +49,17 @@ numerics → core → physical → dynamics → control ┐
 The theory each layer implements is written up in [`docs/theory/`](docs/theory/)
 (`model.md`, `lqr.md`, `kalman.md`, `optimization.md`, `notation.md`).
 
+## Documentation
+
+Full documentation is indexed in [`docs/README.md`](docs/README.md). New readers
+should start with the [**codebase overview**](docs/guides/codebase_overview.md) —
+a guided tour of every layer, the data flow, and the conventions. Topic guides
+cover the [hand-written numerics](docs/guides/numerics_from_scratch.md),
+[control and estimation](docs/guides/control_and_estimation.md), the
+[Bayesian-optimisation layer](docs/guides/bayesian_optimization_walkthrough.md),
+[running experiments](docs/guides/running_experiments.md), and an empirical
+[comparison of the acquisition functions](docs/guides/experiments.md).
+
 ## Running an experiment
 
 Tests and scripts run with `PYTHONPATH=src` (there is no installed package yet).
