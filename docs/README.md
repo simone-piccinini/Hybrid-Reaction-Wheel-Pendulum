@@ -23,6 +23,9 @@ start with the **codebase overview**, then dip into theory or guides as needed.
 - [Frequency Analysis](guides/frequency_analysis.md) — from the state-space form
   to the Bode diagram via the Laplace transfer function `G(s)=C(sI−A)⁻¹B+D`,
   with the derivation and the reading of the plant's poles.
+- [Time-Domain Response](guides/time_domain_response.md) — step response,
+  initial-condition (regulation) transient via `x(t)=e^{At}x₀`, the standard
+  transient metrics, and modal analysis (poles → `ω_n`, `ζ`), linear vs nonlinear.
 - [Experiments](guides/experiments.md) — an empirical comparison of the three
   acquisition functions, reproducible from `scripts/compare_acquisitions.py`.
 

@@ -108,6 +108,44 @@ def plot_bode(omega, magnitude_db, phase_deg, *, title: str = "Bode diagram",
     return fig
 
 
+def plot_time_response(time, signals, *, labels=None, ylabel: str = "output",
+                       title: str = "Time response", reference: float | None = None):
+    """Plot one or more time signals on a shared time axis.
+
+    ``signals`` is a 1-D array or a list/2-D array of equal-length signals
+    (one per column / entry); ``labels`` names them. ``reference`` draws a
+    horizontal target line (e.g. 0 for a regulator). Returns the ``Figure``.
+    """
+    import matplotlib.pyplot as plt
+
+    time = np.asarray(time, dtype=np.float64)
+    signals = np.atleast_2d(np.asarray(signals, dtype=np.float64))
+    if signals.shape[0] != time.shape[0]:
+        signals = signals.T  # accept (n_signals, T) too
+    fig, ax = plt.subplots(figsize=(9, 4.5))
+    for j in range(signals.shape[1]):
+        label = labels[j] if labels is not None and j < len(labels) else None
+        ax.plot(time, signals[:, j], label=label, linewidth=1.4)
+    if reference is not None:
+        ax.axhline(reference, color="0.6", linewidth=0.9, linestyle=":",
+                   label="reference")
+    ax.set_xlabel("time (s)")
+    ax.set_ylabel(ylabel)
+    ax.set_title(title)
+    ax.grid(True, linewidth=0.3)
+    if labels is not None or reference is not None:
+        ax.legend(loc="best", fontsize=8)
+    fig.tight_layout()
+    return fig
+
+
+def plot_step_response(time, output, *, title: str = "Step response",
+                       label: str | None = None):
+    """Plot a single step-response curve (thin wrapper over plot_time_response)."""
+    return plot_time_response(time, output, labels=None if label is None else [label],
+                              ylabel="output", title=title)
+
+
 def save_figure(figure, path) -> Path:
     """Save a figure to ``path`` (parent directories created) and return it."""
     path = Path(path)

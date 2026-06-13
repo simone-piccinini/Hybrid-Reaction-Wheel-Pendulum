@@ -60,3 +60,20 @@ def test_plot_bode_returns_two_axes():
     phase_deg = -90.0 * np.ones_like(omega)
     fig = plot_bode(omega, magnitude_db, phase_deg, title="test", label="ch")
     assert len(fig.axes) == 2  # magnitude and phase rows
+
+
+def test_plot_time_response_multiple_signals():
+    from inverted_pendulum.io.plotting import plot_time_response
+
+    time = np.linspace(0, 1, 50)
+    signals = np.stack([np.exp(-time), np.cos(time)], axis=1)
+    fig = plot_time_response(time, signals, labels=["a", "b"], reference=0.0)
+    assert len(fig.axes) == 1
+
+
+def test_plot_step_response_single():
+    from inverted_pendulum.io.plotting import plot_step_response
+
+    time = np.linspace(0, 2, 50)
+    fig = plot_step_response(time, 1 - np.exp(-time), label="step")
+    assert len(fig.axes) == 1
