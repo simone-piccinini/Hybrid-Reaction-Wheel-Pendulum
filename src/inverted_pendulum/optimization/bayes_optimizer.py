@@ -190,8 +190,16 @@ class BayesianOptimizer:
     def best_theta(
         self, rng: np.random.Generator, n_candidates: int = DEFAULT_REPORT_CANDIDATES
     ) -> np.ndarray:
-        """The posterior-mean minimiser over a candidate set (search coords; §5)."""
-        candidates = self.space.sample(n_candidates, rng)
+        """The posterior-mean minimiser over a candidate set (search coords; §5).
+
+        The candidate set is a fresh space-filling sample **plus the evaluated
+        points themselves**: the posterior mean is best determined where data
+        has been collected, so including the observations keeps the report from
+        landing on an over-optimistic, never-evaluated corner when the budget
+        is small. It is still an ``argmin μ_T`` over a discretisation of Θ (§5).
+        """
+        sampled = self.space.sample(n_candidates, rng)
+        candidates = np.vstack([sampled, self.data.X])
         means = self.gp.predict(candidates).mean
         return candidates[int(np.argmin(means))].copy()
 
