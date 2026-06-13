@@ -20,6 +20,7 @@ Example
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 from pathlib import Path
 
 from inverted_pendulum.experiment.manager import ExperimentManager
@@ -30,13 +31,20 @@ def main() -> None:
     parser.add_argument("config", nargs="?", default="configs/default.yaml",
                         help="path to the experiment YAML config")
     parser.add_argument("-o", "--out", default=None,
-                        help="output directory for the run record")
+                        help="output directory for the run record "
+                             "(default: results/<name>/<timestamp>)")
     parser.add_argument("--no-plots", action="store_true",
                         help="do not render trajectory/convergence plots")
     args = parser.parse_args()
 
     manager = ExperimentManager.from_config_file(args.config)
-    out_dir = Path(args.out) if args.out else Path("results") / manager.config.name
+    # one folder per run: a timestamped subfolder keeps successive runs of the
+    # same config side by side instead of overwriting. An explicit -o wins.
+    if args.out:
+        out_dir = Path(args.out)
+    else:
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        out_dir = Path("results") / manager.config.name / stamp
 
     print(f"Running experiment '{manager.config.name}' "
           f"(seed={manager.seed}, git={manager.git_hash[:10]})")

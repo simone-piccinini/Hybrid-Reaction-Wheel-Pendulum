@@ -120,8 +120,23 @@ could "cheat" by proposing a noiseless world. See `simulation/disturbances.py`.
 
 ## 4. What a run writes
 
+### One folder per run
+
+`scripts/run_experiment.py` writes each run to its **own timestamped folder**,
+`results/<name>/<YYYYmmdd-HHMMSS>/`, so successive runs of the same config sit
+side by side instead of overwriting. Pass `-o DIR` to choose a fixed directory
+instead (it then *will* overwrite that directory). So after two runs of the
+default config you get, e.g.:
+
+```
+results/default/20260613-195106/   ← first run
+results/default/20260613-203412/   ← second run
+```
+
+### The files in a run folder
+
 `save_results` (via `io.run_logging.save_run`) writes the AGENTS §7
-reproducibility bundle into the run directory:
+reproducibility bundle:
 
 | File | Contents |
 |---|---|
@@ -131,13 +146,34 @@ reproducibility bundle into the run directory:
 | `trajectory.png` | (with `plots=True`) true vs estimated states and the control history |
 | `convergence.png` | (with `plots=True`) observed cost and running best per evaluation |
 
-Everything is JSON or NumPy `.npz`, so a run reloads with the standard library
-and NumPy alone — no project code required to inspect results:
+### Reading the results — and why these formats
+
+**`metadata.json`** is plain JSON (human-readable, diff-able, opens in any
+editor) — the right format for small, mixed scalar/text/config metadata.
+
+**`.npz`** is NumPy's native container for **named arrays**: a single zip
+holding several `float64` arrays, written and read losslessly and efficiently.
+We use it for the numeric time series (a 10 s rollout is `1000 × 4` floats per
+state array) because JSON or CSV would be larger, slower, lossy on the last
+binary digits, and awkward for multiple arrays. A run reloads with the standard
+library and NumPy alone — **no project code required**:
 
 ```python
 import json, numpy as np
-meta = json.load(open("results/run01/metadata.json"))
-traj = np.load("results/run01/trajectories.npz")
+
+run = "results/default/20260613-195106"
+meta = json.load(open(f"{run}/metadata.json"))
+print(meta["metrics"], meta["git_hash"])
+
+traj = np.load(f"{run}/trajectories.npz")   # dict-like of named arrays
+print(traj.files)                            # ['time','true_states',...]
+t      = traj["time"]                        # (T,)
+theta  = traj["true_states"][:, 0]           # pendulum angle over time
+u      = traj["controls"][:, 0]              # applied voltage
+
+hist = np.load(f"{run}/history.npz")
+X, y = hist["X"], hist["y"]                   # evaluated θ (n×11) and costs (n,)
+print("best cost", y.min(), "at evaluation", int(y.argmin()) + 1)
 ```
 
 The `metrics` dict records, for the reported optimum's representative rollout:
