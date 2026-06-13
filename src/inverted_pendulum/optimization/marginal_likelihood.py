@@ -115,20 +115,25 @@ def negative_log_marginal_likelihood(
     K_n_inv = chol_solve(symmetrize(K_n), np.eye(n))
     A = np.outer(alpha, alpha) - K_n_inv
 
-    # per-pair kernel derivatives, assembled into the d+1 derivative matrices
-    dK = np.zeros((d + 1, n, n))
-    for i in range(n):
-        for j in range(i, n):
-            g = kernel.gradient(X[i], X[j])
-            dK[:, i, j] = g
-            dK[:, j, i] = g
+    # per-pair kernel derivatives, assembled into the d+1 derivative matrices.
+    # extreme (but feasible) ℓ can overflow the cubic terms in Kernel.gradient;
+    # such a φ is treated as infeasible just below (the over guard is silenced).
+    with np.errstate(over="ignore", invalid="ignore"):
+        dK = np.zeros((d + 1, n, n))
+        for i in range(n):
+            for j in range(i, n):
+                g = kernel.gradient(X[i], X[j])
+                dK[:, i, j] = g
+                dK[:, j, i] = g
 
-    grad_log_p = np.empty(d + 2)
-    for p_idx in range(d + 1):  # log ℓᵢ and log σ_f: chain rule ·φ
-        grad_log_p[p_idx] = 0.5 * phi[p_idx] * float(np.sum(A * dK[p_idx]))
-    # log σ_n: ∂K_n/∂(log σ_n) = 2 σ_n² I
-    grad_log_p[-1] = 0.5 * 2.0 * noise_variance * float(np.trace(A))
+        grad_log_p = np.empty(d + 2)
+        for p_idx in range(d + 1):  # log ℓᵢ and log σ_f: chain rule ·φ
+            grad_log_p[p_idx] = 0.5 * phi[p_idx] * float(np.sum(A * dK[p_idx]))
+        # log σ_n: ∂K_n/∂(log σ_n) = 2 σ_n² I
+        grad_log_p[-1] = 0.5 * 2.0 * noise_variance * float(np.trace(A))
 
+    if not (np.isfinite(log_p) and np.all(np.isfinite(grad_log_p))):
+        return _INFEASIBLE_NLL, np.zeros(d + 2)
     return -log_p, -grad_log_p
 
 
