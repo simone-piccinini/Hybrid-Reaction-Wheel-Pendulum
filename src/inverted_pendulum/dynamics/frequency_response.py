@@ -159,6 +159,148 @@ def bode(
     )
 
 
+def loop_transfer_function(
+    plant: StateSpaceModel, gain_K, gain_L, omega
+) -> np.ndarray:
+    """Open-loop gain ``L = −K_c(z)·G(z)`` of the LQG loop, broken at the input.
+
+    For stability-margin analysis an expert looks not at the closed-loop
+    response but at the **loop transfer function** of the broken loop — the
+    return ratio seen at the plant input. With the LQG controller (Kalman
+    observer + LQR feedback) realised, in current-estimator predictor form, as
+
+        A_c = (A_d − B_d K)(I − L C),   B_c = (A_d − B_d K) L,
+        C_c = −K (I − L C),            D_c = −K L,
+
+    its transfer function ``K_c(z)`` (measurement → control) composes with the
+    plant ``G(z) = C(zI − A_d)⁻¹B_d`` into the scalar return ratio at the input
+
+        L(z) = −K_c(z) · G(z)
+
+    (the leading minus puts it in the standard negative-feedback / critical
+    point −1 convention, since the controller already carries the ``−K``). This
+    is a discrete-time loop (``z = e^{jωΔt}``); the controller realised here is
+    exactly the one the simulator runs (predict → update → ``u = −K x̂``).
+
+    Parameters
+    ----------
+    plant : StateSpaceModel
+        The **discrete** plant ``(A_d, B_d, C)`` the controller was designed for
+        (single input). Must be controllable and observable for the LQG loop to
+        be well-defined — drop any decoupled/undetectable mode first (e.g. the
+        wheel angle), see ``scripts/stability_margins.py``.
+    gain_K : (n_u, n_x) array_like
+        The LQR feedback gain ``K``.
+    gain_L : (n_x, n_y) array_like
+        The steady-state Kalman gain ``L``.
+    omega : float or array_like
+        Angular frequencies ω (rad/s); evaluated on the unit circle.
+
+    Returns
+    -------
+    (n_omega,) ndarray of complex128
+        The scalar loop gain ``L(jω)``.
+    """
+    if not isinstance(plant, StateSpaceModel):
+        raise TypeError("plant must be a StateSpaceModel")
+    if not plant.is_discrete:
+        raise ValueError("loop_transfer_function expects a discrete plant model")
+    if plant.n_u != 1:
+        raise ValueError("the loop is broken at a single (scalar) input")
+    K = np.asarray(gain_K, dtype=np.float64)
+    L = np.asarray(gain_L, dtype=np.float64)
+    n_x, n_u, n_y = plant.n_x, plant.n_u, plant.n_y
+    if K.shape != (n_u, n_x):
+        raise ValueError(f"gain_K must be (n_u, n_x)=({n_u}, {n_x}), got {K.shape}")
+    if L.shape != (n_x, n_y):
+        raise ValueError(f"gain_L must be (n_x, n_y)=({n_x}, {n_y}), got {L.shape}")
+
+    A_d, B_d, C = plant.A, plant.B, plant.C
+    closed = A_d - B_d @ K
+    filtered = np.eye(n_x) - L @ C
+    controller = StateSpaceModel(
+        closed @ filtered,        # A_c
+        closed @ L,               # B_c   (input: measurement, n_y)
+        -K @ filtered,            # C_c   (output: control, n_u)
+        -K @ L,                   # D_c
+        is_discrete=True, dt=plant.dt,
+    )
+    K_c = transfer_function(controller, omega)   # (n_omega, n_u, n_y)
+    G = transfer_function(plant, omega)          # (n_omega, n_y, n_u)
+    loop = -np.einsum("kij,kjl->kil", K_c, G)    # (n_omega, n_u, n_u) = (.,1,1)
+    return loop[:, 0, 0]
+
+
+@dataclass(frozen=True)
+class StabilityMargins:
+    """Classical stability margins of a loop gain (``scripts/stability_margins.py``).
+
+    Fields
+    ------
+    gain_margin_db : float
+        How much the loop gain may grow before instability — the attenuation
+        ``−20log₁₀|L|`` at the phase crossover (``inf`` if the phase never
+        reaches −180°). An expert wants ≳ 6 dB.
+    phase_margin_deg : float
+        How much extra phase lag (e.g. computation/actuation delay) the loop can
+        absorb before instability — ``180° + ∠L`` at the gain crossover (``inf``
+        if the gain never crosses 0 dB). An expert wants ≳ 30–45°.
+    gain_crossover : float
+        Frequency where ``|L| = 1`` (0 dB), rad/s (``nan`` if none).
+    phase_crossover : float
+        Frequency where ``∠L = −180°``, rad/s (``nan`` if none).
+    """
+
+    gain_margin_db: float
+    phase_margin_deg: float
+    gain_crossover: float
+    phase_crossover: float
+
+
+def _log_interp_frequency(omega, values, level, i) -> float:
+    """Frequency where ``values`` reaches ``level`` between indices ``i, i+1`` (log-ω)."""
+    frac = (level - values[i]) / (values[i + 1] - values[i])
+    return float(omega[i] * (omega[i + 1] / omega[i]) ** frac)
+
+
+def stability_margins(omega, loop) -> StabilityMargins:
+    """Gain and phase margins of a scalar loop gain ``L(jω)`` (``omega`` ascending).
+
+    The gain margin is read at the first phase crossover (∠L = −180° − 360k),
+    the phase margin at the first gain crossover (|L| = 1), both by interpolation
+    on the supplied grid. A finer ``omega`` grid gives sharper crossovers.
+    """
+    omega = np.asarray(omega, dtype=np.float64)
+    loop = np.asarray(loop, dtype=np.complex128)
+    magnitude = np.abs(loop)
+    phase = np.degrees(np.unwrap(np.angle(loop)))
+
+    # phase margin at the first gain crossover (|L| = 1)
+    phase_margin, gain_crossover = float("inf"), float("nan")
+    gain_cross = np.where(np.diff(np.sign(magnitude - 1.0)))[0]
+    if gain_cross.size:
+        i = int(gain_cross[0])
+        gain_crossover = _log_interp_frequency(omega, magnitude, 1.0, i)
+        frac = (1.0 - magnitude[i]) / (magnitude[i + 1] - magnitude[i])
+        phase_at_gc = phase[i] + frac * (phase[i + 1] - phase[i])
+        phase_margin = ((180.0 + phase_at_gc) + 180.0) % 360.0 - 180.0
+
+    # gain margin at the first phase crossover (∠L = −180° − 360k)
+    gain_margin_db, phase_crossover = float("inf"), float("nan")
+    candidates = []
+    for k in range(6):
+        level = -180.0 - 360.0 * k
+        for i in np.where(np.diff(np.sign(phase - level)))[0]:
+            candidates.append((omega[int(i)], int(i), level))
+    if candidates:
+        _, i, level = min(candidates, key=lambda t: t[0])
+        phase_crossover = _log_interp_frequency(omega, phase, level, i)
+        frac = (level - phase[i]) / (phase[i + 1] - phase[i])
+        magnitude_at_pc = magnitude[i] + frac * (magnitude[i + 1] - magnitude[i])
+        gain_margin_db = float(-20.0 * np.log10(abs(magnitude_at_pc)))
+    return StabilityMargins(gain_margin_db, phase_margin, gain_crossover, phase_crossover)
+
+
 def log_frequencies(omega_min: float, omega_max: float, n_points: int = 400) -> np.ndarray:
     """A log-spaced frequency grid ``[ω_min, ω_max]`` (rad/s) for Bode sweeps.
 

@@ -77,3 +77,15 @@ def test_plot_step_response_single():
     time = np.linspace(0, 2, 50)
     fig = plot_step_response(time, 1 - np.exp(-time), label="step")
     assert len(fig.axes) == 1
+
+
+def test_plot_loop_bode_with_margins():
+    from inverted_pendulum.dynamics.frequency_response import stability_margins
+    from inverted_pendulum.io.plotting import plot_loop_bode
+
+    w = np.logspace(-2, 2, 2000)
+    loop = 2.0 / ((1j * w + 1.0) ** 3)  # finite GM and PM
+    margins = stability_margins(w, loop)
+    fig = plot_loop_bode(w, loop, margins=margins)
+    assert len(fig.axes) == 2  # magnitude and phase rows
+    assert "GM" in fig._suptitle.get_text() and "PM" in fig._suptitle.get_text()
