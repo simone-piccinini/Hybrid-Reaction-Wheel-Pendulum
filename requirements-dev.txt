@@ -11,3 +11,4 @@ pytest>=8.0
 scipy>=1.13        # solve_discrete_are, expm, signal, solve_ivp, linalg refs
 scikit-learn>=1.5  # GaussianProcessRegressor reference for the GP
 filterpy>=1.4      # KalmanFilter reference
+control>=0.10      # loop transfer function / margin reference

@@ -22,7 +22,8 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   acquisitions, and the outer loop.
 - [Frequency Analysis](guides/frequency_analysis.md) — from the state-space form
   to the Bode diagram via the Laplace transfer function `G(s)=C(sI−A)⁻¹B+D`,
-  with the derivation and the reading of the plant's poles.
+  with the derivation and the reading of the plant's poles; plus the **open-loop
+  LQG loop gain and stability margins** (phase/gain margin, Doyle's caveat).
 - [Time-Domain Response](guides/time_domain_response.md) — step response,
   initial-condition (regulation) transient via `x(t)=e^{At}x₀`, the standard
   transient metrics, and modal analysis (poles → `ω_n`, `ζ`), linear vs nonlinear.

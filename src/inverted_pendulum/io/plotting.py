@@ -108,6 +108,57 @@ def plot_bode(omega, magnitude_db, phase_deg, *, title: str = "Bode diagram",
     return fig
 
 
+def plot_loop_bode(omega, loop, *, margins=None, title: str = "Open-loop gain L(jω)"):
+    """Bode of a scalar loop gain with the stability margins annotated.
+
+    ``loop`` is the complex ``L(jω)`` (e.g. from
+    ``dynamics.frequency_response.loop_transfer_function``); ``margins`` is the
+    optional ``StabilityMargins`` to mark (gain/phase crossovers, the 0 dB and
+    −180° reference lines, and PM/GM in the title). Returns the two-row Figure.
+    """
+    import matplotlib.pyplot as plt
+
+    omega = np.asarray(omega, dtype=np.float64)
+    loop = np.asarray(loop, dtype=np.complex128)
+    magnitude_db = 20.0 * np.log10(np.abs(loop))
+    phase_deg = np.degrees(np.unwrap(np.angle(loop)))
+
+    if margins is not None:
+        gm = margins.gain_margin_db
+        pm = margins.phase_margin_deg
+        gm_txt = "∞" if not np.isfinite(gm) else f"{gm:.1f} dB"
+        pm_txt = "∞" if not np.isfinite(pm) else f"{pm:.1f}°"
+        title = f"{title}   —   GM = {gm_txt},  PM = {pm_txt}"
+
+    fig, (ax_mag, ax_phase) = plt.subplots(2, 1, figsize=(9, 6), sharex=True)
+    ax_mag.semilogx(omega, magnitude_db)
+    ax_mag.axhline(0.0, color="0.6", linewidth=0.9, linestyle="--")  # 0 dB
+    ax_mag.set_ylabel("magnitude (dB)")
+    ax_mag.grid(True, which="both", linewidth=0.3)
+    ax_phase.semilogx(omega, phase_deg)
+    ax_phase.axhline(-180.0, color="0.6", linewidth=0.9, linestyle="--")  # −180°
+    ax_phase.set_ylabel("phase (deg)")
+    ax_phase.set_xlabel(r"angular frequency $\omega$ (rad/s)")
+    ax_phase.grid(True, which="both", linewidth=0.3)
+
+    if margins is not None:
+        if np.isfinite(margins.gain_crossover):
+            for ax in (ax_mag, ax_phase):
+                ax.axvline(margins.gain_crossover, color="tab:green",
+                           linewidth=0.8, alpha=0.7)
+            ax_mag.annotate("PM", (margins.gain_crossover, 0.0),
+                            color="tab:green", fontsize=9)
+        if np.isfinite(margins.phase_crossover):
+            for ax in (ax_mag, ax_phase):
+                ax.axvline(margins.phase_crossover, color="tab:red",
+                           linewidth=0.8, alpha=0.7)
+            ax_phase.annotate("GM", (margins.phase_crossover, -180.0),
+                              color="tab:red", fontsize=9)
+    fig.suptitle(title)
+    fig.tight_layout()
+    return fig
+
+
 def plot_time_response(time, signals, *, labels=None, ylabel: str = "output",
                        title: str = "Time response", reference: float | None = None):
     """Plot one or more time signals on a shared time axis.
