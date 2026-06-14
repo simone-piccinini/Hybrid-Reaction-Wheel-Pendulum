@@ -47,12 +47,25 @@ simulation:
 
 # ----------------------------------------------------------------------------
 # objective — the scalar rollout cost y (notation.md §6)
+#   y = w_error·ITAE + w_control·∫u²dt
+#       + w_overshoot·max(0,(Mp-Mp_desired)/Mp_max)²
+#       + w_settling ·max(0,(Ts-Ts_desired)/Ts_max)²
+#       [ + w_saturation·max(0, max|u| - U_max)²   if U_max is set ]
+#   ITAE = ∫ t·|e(t)| dt judges the whole error history; the hinge penalties
+#   fire ONLY when a spec is violated (the controller is free to beat it).
 # ----------------------------------------------------------------------------
 objective:
-  Mp_desired: 5.0            # desired overshoot M_p (%)   [denominator, > 0]
-  Ts_desired: 1.0            # desired settling time T_s (s)   [denominator, > 0]
-  w1: 1.0                    # weight on the overshoot term
-  w2: 1.0                    # weight on the settling-time term
+  Mp_desired: 5.0            # target overshoot M_p (%); no penalty at or below
+  Mp_max: 20.0               # max acceptable M_p — normalises the hinge [>0]
+  Ts_desired: 1.0            # target settling time T_s (s); no penalty at/below
+  Ts_max: 3.0                # max acceptable T_s — normalises the hinge [>0]
+  w_error: 100.0             # w_e — weight on ITAE (the main performance driver)
+  w_control: 0.1             # w_u — weight on control energy ∫u²dt (regulariser)
+  w_overshoot: 100.0         # w_p — overshoot penalty weight (keep LARGE)
+  w_settling: 100.0          # w_t — settling-time penalty weight (keep LARGE)
+  U_max: 24.0                # actuation limit (V); peaks beyond it are penalised
+  w_saturation: 10.0         # penalty weight on max|u| past U_max
+  # error_state_index: 0     # which state is e(t) for ITAE (default 0 = theta_p)
   # penalty: optional; omitted -> core PENALTY (1e3) for a diverged rollout
 
 # ----------------------------------------------------------------------------

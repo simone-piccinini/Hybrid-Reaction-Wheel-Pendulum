@@ -154,22 +154,42 @@ class SimulationConfig:
 
 @dataclass(frozen=True)
 class ObjectiveConfig:
-    """Cost-function settings (``notation.md`` §6)."""
+    """Cost-function settings (``notation.md`` §6).
+
+    The cost is ``w_error·ITAE + w_control·∫u² + hinge penalties on M_p, T_s``
+    (and optionally on the peak input past ``U_max``). The hinge penalties are
+    normalised by the maximum-acceptable values ``Mp_max``/``Ts_max``.
+    """
 
     Mp_desired: float
     Ts_desired: float
-    w1: float = 1.0
-    w2: float = 1.0
+    Mp_max: float = 20.0
+    Ts_max: float = 3.0
+    w_error: float = 1.0
+    w_control: float = 1.0
+    w_overshoot: float = 100.0
+    w_settling: float = 100.0
+    U_max: float | None = None
+    w_saturation: float = 100.0
+    error_state_index: int = 0
     penalty: float | None = None  # None → ObjectiveFunction's PENALTY default
 
     @classmethod
     def from_dict(cls, d: dict) -> "ObjectiveConfig":
         penalty = d.get("penalty")
+        u_max = d.get("U_max")
         return cls(
             Mp_desired=float(_require(d, "Mp_desired", "objective")),
             Ts_desired=float(_require(d, "Ts_desired", "objective")),
-            w1=float(d.get("w1", 1.0)),
-            w2=float(d.get("w2", 1.0)),
+            Mp_max=float(d.get("Mp_max", 20.0)),
+            Ts_max=float(d.get("Ts_max", 3.0)),
+            w_error=float(d.get("w_error", 1.0)),
+            w_control=float(d.get("w_control", 1.0)),
+            w_overshoot=float(d.get("w_overshoot", 100.0)),
+            w_settling=float(d.get("w_settling", 100.0)),
+            U_max=None if u_max is None else float(u_max),
+            w_saturation=float(d.get("w_saturation", 100.0)),
+            error_state_index=int(d.get("error_state_index", 0)),
             penalty=None if penalty is None else float(penalty),
         )
 

@@ -63,7 +63,7 @@ def make_gp(noise=1e-2):
 
 
 def make_objective():
-    return ObjectiveFunction(Mp_desired=5.0, Ts_desired=0.5, w1=1.0, w2=1.0)
+    return ObjectiveFunction(Mp_desired=5.0, Ts_desired=0.5)
 
 
 def make_bo(acquisition=None, optimize_hyperparameters=False, **engine_kwargs):

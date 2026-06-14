@@ -88,7 +88,7 @@ A configuration has eight sections plus a `name` and a master `seed`.
 | (top) | `name`, `seed` | `seed` threads through **all** randomness (AGENTS §7) |
 | `plant` | masses, inertias, frictions, `wheel`, `motor` | SI units; inertias and `resistance` are denominators (> 0) |
 | `simulation` | `dt`, `simulation_time`, `initial_state`, `divergence_angle`, `disturbances` | `disturbances` is the **true** world noise, *not* the filter's `W`/`V` |
-| `objective` | `Mp_desired`, `Ts_desired`, `w1`, `w2`, `penalty?` | the `notation.md` §6 cost; desired values are denominators (> 0) |
+| `objective` | `Mp_desired`/`Mp_max`, `Ts_desired`/`Ts_max`, `w_error`, `w_control`, `w_overshoot`, `w_settling`, `U_max?`, `penalty?` | the `notation.md` §6 cost: ITAE + control energy + **hinge** spec penalties (normalised by the `*_max` values) |
 | `search_space` | `lower_bounds`, `upper_bounds`, `log_scale?` | length-11 vectors in **log-space** (see below) |
 | `gp` | `kernel`, `signal_variance`, `noise_variance`, `lengthscales?` | `kernel ∈ {matern52, squared_exponential}` |
 | `acquisition` | `kind`, `params` | `kind ∈ {entropy_search, expected_improvement, ucb}`; `params` is forwarded verbatim |
@@ -177,7 +177,7 @@ print("best cost", y.min(), "at evaluation", int(y.argmin()) + 1)
 ```
 
 The `metrics` dict records, for the reported optimum's representative rollout:
-`objective`, `overshoot`, `settling_time`, `control_effort`,
+`objective`, `itae`, `overshoot`, `settling_time`, `control_effort`,
 `oscillation_energy`, `trajectory_entropy`, `diverged`, plus the search summary
 `best_observed_cost` and `n_evaluations`.
 

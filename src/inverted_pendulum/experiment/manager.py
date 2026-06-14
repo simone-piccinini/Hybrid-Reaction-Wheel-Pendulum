@@ -23,7 +23,7 @@ import numpy as np
 from ..core.types import LQGConfig, SearchSpace, SimulationResult
 from ..io.config_loader import ExperimentConfig, load_config
 from ..io.run_logging import current_git_hash, save_run
-from ..metrics.performance_metrics import control_effort, oscillation_energy
+from ..metrics.performance_metrics import control_effort, itae, oscillation_energy
 from ..metrics.stability_metrics import overshoot, settling_time
 from ..metrics.trajectory_entropy import trajectory_entropy
 from ..optimization.acquisition.entropy_search import EntropySearch
@@ -153,8 +153,14 @@ class ExperimentManager:
     def build_objective(self) -> ObjectiveFunction:
         """Assemble the cost function from the ``objective`` config section."""
         o = self.config.objective
-        kwargs = dict(Mp_desired=o.Mp_desired, Ts_desired=o.Ts_desired,
-                      w1=o.w1, w2=o.w2)
+        kwargs = dict(
+            Mp_desired=o.Mp_desired, Ts_desired=o.Ts_desired,
+            Mp_max=o.Mp_max, Ts_max=o.Ts_max,
+            w_error=o.w_error, w_control=o.w_control,
+            w_overshoot=o.w_overshoot, w_settling=o.w_settling,
+            U_max=o.U_max, w_saturation=o.w_saturation,
+            error_state_index=o.error_state_index,
+        )
         if o.penalty is not None:
             kwargs["penalty"] = o.penalty
         return ObjectiveFunction(**kwargs)
@@ -246,6 +252,7 @@ class ExperimentManager:
         objective = optimizer.objective
         return {
             "objective": objective.evaluate(result),
+            "itae": itae(result),
             "overshoot": overshoot(result),
             "settling_time": settling_time(result),
             "control_effort": control_effort(result),

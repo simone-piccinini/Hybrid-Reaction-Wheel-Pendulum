@@ -12,6 +12,12 @@ Improvement (EI), Upper/Lower Confidence Bound (UCB), and the project-goal
 > (`Mp_desired = 5 %`, `Ts_desired = 1 s`), so the absolute costs are high and
 > the seed-to-seed spread is wide. The experiment is designed to compare
 > *behaviour* under equal conditions, not to deliver a converged tuning.
+>
+> **Objective version.** These runs predate the current cost function: they used
+> the earlier symmetric quadratic cost on `M_p`/`T_s`. The cost has since been
+> changed to ITAE + control energy + asymmetric hinge penalties (`notation.md`
+> §6), so the absolute numbers here are not comparable to runs under the new
+> objective — but the *relative* acquisition comparison still stands.
 
 ---
 

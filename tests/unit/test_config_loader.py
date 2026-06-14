@@ -67,7 +67,10 @@ def test_from_dict_minimal_and_defaults():
     assert config.plant.gravity == 9.81
     assert config.plant.pivot_friction == 0.0
     assert config.plant.motor.max_voltage == float("inf")
-    assert config.objective.w1 == 1.0
+    assert config.objective.w_error == 1.0
+    assert config.objective.w_overshoot == 100.0
+    assert config.objective.Mp_max == 20.0
+    assert config.objective.U_max is None
     assert config.objective.penalty is None
     assert config.gp.kernel == "matern52"  # gp section omitted -> defaults
     assert config.acquisition.kind == "entropy_search"

@@ -106,13 +106,42 @@ Note: the control Riccati solution `P_care` and the estimator covariance `P_est`
 | $\mathcal{D}_n$ | dataset $\{(\theta_i, y_i)\}$ | `Dataset` | — |
 | $M_p$ | percentage overshoot | `overshoot` | — |
 | $T_s$ | settling time | `settling_time` | s |
-| $w_1, w_2$ | cost weights on $M_p$, $T_s$ | `w1`, `w2` | scalar |
+| $e(t)$ | regulated error $\theta_p(t) - 0$ | `true_states[:,0]` | rad |
+| $\mathrm{ITAE}$ | $\int_0^{T} t\,\lvert e(t)\rvert\,dt$ | `itae` | rad·s² |
+| $M_p^{\max}, T_s^{\max}$ | max **acceptable** $M_p$, $T_s$ (hinge scales) | `Mp_max`, `Ts_max` | —, s |
+| $U_{\max}$ | actuation limit (optional) | `U_max` | V |
+| $w_e, w_u$ | weights on ITAE, control energy | `w_error`, `w_control` | scalar |
+| $w_p, w_t$ | **penalty** weights on $M_p$, $T_s$ (large) | `w_overshoot`, `w_settling` | scalar |
 
-**Cost function** (`ObjectiveFunction.evaluate`):
+**Cost function** (`ObjectiveFunction.evaluate`). Rather than a symmetric
+squared error on two points of the step response, the cost combines a global
+error index, a control-energy term, and **asymmetric hinge penalties** that
+fire only when a specification is *violated*:
+
 $$
-y = w_1\left(\frac{M_p - M_p^{\text{des}}}{M_p^{\text{des}}}\right)^2 + w_2\left(\frac{T_s - T_s^{\text{des}}}{T_s^{\text{des}}}\right)^2
+y \;=\; w_e\,\underbrace{\int_0^{T} t\,\lvert e(t)\rvert\,dt}_{\text{ITAE}}
+\;+\; w_u \int_0^{T} u(t)^2\,dt
+\;+\; w_p\left[\max\!\Big(0,\tfrac{M_p - M_p^{\text{des}}}{M_p^{\max}}\Big)\right]^2
+\;+\; w_t\left[\max\!\Big(0,\tfrac{T_s - T_s^{\text{des}}}{T_s^{\max}}\Big)\right]^2
 $$
-Code: `Mp_desired`, `Ts_desired`.
+
+with an optional actuation-saturation penalty $w_{\text{sat}}\big[\max(0,\;\max_t\lvert u(t)\rvert - U_{\max})\big]^2$.
+
+- **ITAE** weights *late* error by $t$, so minimising it speeds up settling and
+  drives the steady-state error to zero — judging the whole history, not two
+  isolated points.
+- The **hinge** terms are zero while the response meets the spec (the controller
+  is free to be *better* than target) and grow quadratically past it.
+  Normalising by the *maximum acceptable* value $M_p^{\max}$/$T_s^{\max}$ keeps
+  them scale-free and avoids the division-by-zero of a desired-value denominator.
+- $w_p, w_t$ are deliberately **large**: a spec violation must make $y$ spike so
+  the optimiser discards those hyper-parameters. $w_e, w_u$ set the general
+  trade-off among spec-satisfying designs (the system-level analogue of the
+  LQR's $Q$/$R$).
+
+Code: `Mp_desired`, `Mp_max`, `Ts_desired`, `Ts_max`, `w_error`, `w_control`,
+`w_overshoot`, `w_settling`, `U_max`, `w_saturation`. A diverged rollout maps to
+a large finite `PENALTY` (§7).
 
 ---
 

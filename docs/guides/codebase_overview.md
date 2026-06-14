@@ -99,7 +99,7 @@ optimiser is allowed to touch.
 
 ### `metrics/` — scoring a rollout
 Pure functions of a `SimulationResult`: `overshoot`, `settling_time`,
-`control_effort`, `oscillation_energy`, and the (physical) `trajectory_entropy`
+`control_effort`, `oscillation_energy`, `itae`, and the (physical) `trajectory_entropy`
 — not to be confused with the information-theoretic entropy in Entropy Search.
 
 ### `optimization/` — the tuner
