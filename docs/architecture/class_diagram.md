@@ -116,11 +116,18 @@ class SimulationResult {
 class ObjectiveFunction {
     +float Mp_desired
     +float Ts_desired
-    +float w1
-    +float w2
+    +float Mp_max
+    +float Ts_max
+    +float w_error
+    +float w_control
+    +float w_overshoot
+    +float w_settling
+    +float U_max
+    +float w_saturation
     +computeOvershoot(result) float
     +computeSettlingTime(result) float
     +computeControlEffort(result) float
+    +computeItae(result) float
     +evaluate(result) float
 }
 ObjectiveFunction ..> SimulationResult : consumes

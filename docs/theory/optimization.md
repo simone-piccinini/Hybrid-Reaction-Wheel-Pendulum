@@ -20,11 +20,11 @@ The objective is the realised closed-loop cost,
 
 $$
 
-J(\boldsymbol{\theta}) = \mathbb{E}\!\left[\, \text{closed-loop quadratic cost of the controller built from } \boldsymbol{\theta} \,\right],
+J(\boldsymbol{\theta}) = \mathbb{E}\!\left[\, \text{closed-loop performance cost of the controller built from } \boldsymbol{\theta} \,\right],
 
 $$
 
-which has three defining properties: it is **expensive** (each query is a full simulated rollout), **noisy** (each rollout realises random process/measurement noise and a random initial condition), and **black-box** (no gradient, no analytic form — only point evaluations). The optimizer interacts with the rest of the system through a single abstraction: an oracle that maps a candidate $\boldsymbol{\theta}$ to a scalar observation
+the scalar score of one rollout (its concrete form — an ITAE error index, a control-energy term, and asymmetric hinge penalties on the overshoot and settling-time specs — is given in `notation.md` §6, but the optimiser never needs it). It has three defining properties: it is **expensive** (each query is a full simulated rollout), **noisy** (each rollout realises random process/measurement noise and a random initial condition), and **black-box** (no gradient, no analytic form — only point evaluations). The optimizer interacts with the rest of the system through a single abstraction: an oracle that maps a candidate $\boldsymbol{\theta}$ to a scalar observation
 
 $$
 

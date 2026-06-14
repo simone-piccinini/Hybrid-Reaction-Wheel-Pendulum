@@ -18,3 +18,6 @@ results/
 experiments/*/results/
 
 from_last_time.txt
+
+# Local implementation notes — kept off GitHub on purpose
+docs/implementation_notes/

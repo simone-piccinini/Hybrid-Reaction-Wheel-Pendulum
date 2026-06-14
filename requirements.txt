@@ -1,0 +1,10 @@
+# Runtime dependencies — what the package needs to run.
+# NumPy is used as a calculator only; all solvers are hand-written in numerics/
+# (see AGENTS.md §3). PyYAML loads configs; matplotlib renders the plots.
+#
+# Install with:  pip install -r requirements.txt
+# Run with:      PYTHONPATH=src python scripts/run_experiment.py configs/default.yaml
+
+numpy>=2.0
+pyyaml>=6.0
+matplotlib>=3.8

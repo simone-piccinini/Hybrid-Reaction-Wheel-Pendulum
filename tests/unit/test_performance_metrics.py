@@ -5,6 +5,7 @@ import pytest
 
 from inverted_pendulum.metrics.performance_metrics import (
     control_effort,
+    itae,
     oscillation_energy,
 )
 
@@ -82,3 +83,42 @@ def test_oscillation_other_state_index(make_result):
 def test_oscillation_rejects_bad_index(make_result):
     with pytest.raises(ValueError):
         oscillation_energy(make_result(np.zeros(3)), state_index=7)
+
+
+# --------------------------------------------------------------------------- #
+# ITAE  —  ∫ t·|e(t)| dt
+# --------------------------------------------------------------------------- #
+def test_itae_constant_error(make_result):
+    # e(t) = 1 over [0, T]:  ∫ t·1 dt = T²/2  (trapezoid exact for linear t)
+    t = np.linspace(0.0, 2.0, 2001)
+    r = make_result(np.ones(t.shape[0]), time=t)
+    assert itae(r) == pytest.approx(2.0**2 / 2.0, rel=1e-9)
+
+
+def test_itae_zero_error_is_zero(make_result):
+    assert itae(make_result(np.zeros(50))) == 0.0
+
+
+def test_itae_time_weights_late_error_more(make_result):
+    # the same error pulse counts more when it occurs later in the run
+    n = 200
+    early = np.zeros(n); early[10:20] = 0.1
+    late = np.zeros(n); late[180:190] = 0.1
+    assert itae(make_result(late)) > itae(make_result(early))
+
+
+def test_itae_uses_absolute_value(make_result):
+    # sign of the error must not matter
+    theta = np.array([0.3, -0.5, 0.2, -0.1])
+    assert itae(make_result(theta)) == pytest.approx(itae(make_result(-theta)))
+
+
+def test_itae_single_sample_is_zero(make_result):
+    assert itae(make_result([0.5])) == 0.0
+
+
+def test_itae_rejects_bad_index(make_result):
+    with pytest.raises(ValueError):
+        itae(make_result(np.zeros(5)), state_index=9)
+    with pytest.raises(TypeError):
+        itae("not a result")

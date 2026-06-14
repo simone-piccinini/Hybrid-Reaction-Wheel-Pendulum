@@ -1,0 +1,82 @@
+# A sensible bench-scale reaction-wheel pendulum, with several rollouts averaged
+# per evaluation (n_rollouts_per_eval) so the noisy cost is estimated more
+# reliably (the CLT argument of optimization.md §1). Used by
+# scripts/two_stage_experiment.py for the exploration stage (experiment 1).
+
+name: pendulum_sensible
+
+seed: 0
+
+# ----------------------------------------------------------------------------
+# plant — a realistic small pendulum + reaction wheel + brushless-as-DC motor
+# ----------------------------------------------------------------------------
+plant:
+  pendulum_mass: 0.50        # m_p  (kg)
+  pendulum_length: 0.20      # l_p  pivot -> centre of mass (m)
+  body_inertia: 0.025        # I_b  ~ m·l² for a near-point mass (kg·m²)
+  pivot_friction: 0.005      # b_p  (N·m·s/rad)
+  gravity: 9.81
+  wheel:
+    mass: 0.20               # (kg)
+    radius: 0.06             # (m)
+    inertia: 3.5e-4          # ~ ½ m r² for a disk (kg·m²)
+    friction_coefficient: 1.0e-4
+  motor:
+    resistance: 1.2          # R_a (Ω)
+    torque_constant: 0.08    # K_t (N·m/A)
+    back_emf_constant: 0.08  # K_e (V·s/rad)
+    max_voltage: 24.0        # a real driver rail (V)
+
+# ----------------------------------------------------------------------------
+# simulation
+# ----------------------------------------------------------------------------
+simulation:
+  dt: 0.01
+  simulation_time: 8.0
+  initial_state: [0.08, 0.0, 0.0, 0.0]   # an 0.08 rad (~4.6°) tilt
+  divergence_angle: 1.5708
+  disturbances:
+    process_std: [0.0, 1.0e-4, 0.0, 1.0e-2]
+    measurement_std: [1.0e-3, 1.0e-2]
+
+# ----------------------------------------------------------------------------
+# objective — sensible, achievable targets so the hinge penalties are meaningful
+# (not permanently saturated): see notation.md §6 for the cost form.
+# ----------------------------------------------------------------------------
+objective:
+  Mp_desired: 15.0           # %  (achievable for this plant; cf. analysis)
+  Mp_max: 40.0
+  Ts_desired: 2.0            # s
+  Ts_max: 5.0
+  w_error: 100.0             # ITAE — the main performance driver
+  w_control: 0.1             # control energy regulariser
+  w_overshoot: 50.0          # hinge penalty (large)
+  w_settling: 50.0           # hinge penalty (large)
+  U_max: 24.0                # match the motor rail; penalise saturation
+  w_saturation: 10.0
+
+# ----------------------------------------------------------------------------
+# search_space — 11-D log-space box over vec(Q, R, W, V)
+# ----------------------------------------------------------------------------
+search_space:
+  lower_bounds: [ 0.0, -1.0, -7.0, -7.0,  -1.0,  -19.0, -15.0, -19.0, -11.0,  -15.0, -11.0]
+  upper_bounds: [ 4.0,  2.0, -2.0, -2.0,   2.0,   -8.0,  -8.0,  -8.0,  -6.0,   -8.0,  -6.0]
+
+gp:
+  kernel: matern52
+  signal_variance: 1.0
+  noise_variance: 1.0e-2
+
+acquisition:
+  kind: expected_improvement
+  params:
+    n_candidates: 256
+
+# ----------------------------------------------------------------------------
+# optimization — note the averaged rollouts per evaluation
+# ----------------------------------------------------------------------------
+optimization:
+  n_initial: 8
+  n_iterations: 12
+  n_rollouts_per_eval: 5     # <-- average 5 seeded rollouts per oracle query
+  optimize_hyperparameters: true

@@ -1,149 +1,123 @@
-# Inversed Wheeled pendulum
+# Inverted Reaction-Wheel Pendulum — LQG + Bayesian Optimisation
 
-This project is dividen in the following steps:
+A from-scratch, academic implementation of a stabilising control system for an
+**inverted reaction-wheel pendulum**. The plant is linearised about the upright
+equilibrium, its state is estimated with a **Kalman filter** and controlled
+with an **LQR** law (together: **LQG**), and the LQG weight matrices
+`(Q, R, W, V)` are **tuned automatically by Bayesian Optimisation** with a
+hand-written **Gaussian-process** surrogate and an **Entropy-Search**
+acquisition function.
 
-1) model description and physical world
-    - deriving lagrangian equations
+The point of the project is the *derivation and implementation*: correctness,
+transparency, and traceability to the theory matter more than raw speed.
 
+## The golden rule: no library that solves the problem
 
+Every numerical algorithm is written from scratch in `numerics/` — Cholesky and
+triangular solves, LU, a shifted-QR eigensolver, the matrix exponential, RK4,
+the discrete Riccati solver, and a BFGS optimiser. NumPy is used as a
+calculator (`@`, broadcasting, slicing, seeded RNG) — never as a solver. SciPy,
+scikit-learn, `control`, `filterpy`, GPy and friends appear **only** in
+`tests/validation/`, as ground truth to check the hand-written code against.
+See [`AGENTS.md`](AGENTS.md) and [`docs/conventions/numerical_standards.md`](docs/conventions/numerical_standards.md).
 
-## Repository structure
+## Architecture
 
-```text
-inverted-pendulum/
-│
-├── README.md
-├── AGENTS.md                       # ★ agent guardrails (read-first)
-├── pyproject.toml                  # single source of build/deps
-├── requirements.txt                # pinned RUNTIME deps  → numpy only
-├── requirements-dev.txt            # scipy, control, matplotlib
-├── .gitignore
-│
-├── docs/
-│   ├── architecture/
-│   │   ├── system_design.md
-│   │   ├── class_diagram.md         # mermaid SOURCE (diffable) + exported .pdf
-│   │   ├── control_pipeline.md
-│   │   ├── dependency_rules.md      # ★ allowed/forbidden edges
-│   │   └── data_contracts.md        # ★ LQGConfig, SimulationResult, GPPosterior…
-│   │
-│   ├── theory/
-│   │   ├── notation.md              # ★ symbol ↔ code glossary
-│   │   ├── lagrangian_model.md
-│   │   ├── linearization.md
-│   │   ├── lqr_riccati.md
-│   │   ├── kalman_filter.md
-│   │   ├── gaussian_process.md
-│   │   ├── bayesian_optimization.md
-│   │   └── entropy_search.md        # the ES acquisition (information-theoretic)
-│   │
-│   ├── conventions/
-│   │   ├── coding_standards.md
-│   │   ├── numerical_standards.md   # ★ tolerances, conditioning, no-library rule
-│   │   └── reproducibility.md       # seeds, config, git hash
-│   │
-│   └── papers/
-│       └── annotated/
-│
-├── src/inverted_pendulum/           # importable package (src-layout)
-│   ├── core/                        # shared domain types & interfaces
-│   │   ├── types.py                 # LQGConfig, SimulationResult, Dataset, GPPosterior
-│   │   ├── search_space.py          # bounds, log-scale
-│   │   └── interfaces.py            # abstract base classes
-│   │
-│   ├── numerics/                    # ★ FROM-SCRATCH math primitives
-│   │   ├── linalg.py                # cholesky, triangular_solve, solve, inverse
-│   │   ├── riccati.py               # CARE / DARE solver
-│   │   ├── matrix_exp.py            # discretization (expm)
-│   │   ├── integrators.py           # rk4, euler
-│   │   └── optimizers.py            # gradient descent / L-BFGS-style for ML-II
-│   │
-│   ├── physical/                    # the plant (matches class diagram)
-│   │   ├── dc_motor.py
-│   │   ├── reaction_wheel.py
-│   │   └── reaction_wheel_pendulum.py
-│   │
-│   ├── dynamics/
-│   │   ├── state_space.py
-│   │   ├── nonlinear_model.py
-│   │   └── linearized_model.py
-│   │
-│   ├── control/
-│   │   ├── base.py                  # controller interface
-│   │   ├── lqr_controller.py
-│   │   └── cost_matrices.py
-│   │
-│   ├── estimation/
-│   │   ├── base.py                  # filter interface
-│   │   ├── kalman_filter.py
-│   │   ├── ekf.py                   # extension
-│   │   └── noise_models.py
-│   │
-│   ├── optimization/
-│   │   ├── bayes_optimizer.py
-│   │   ├── gaussian_process.py
-│   │   ├── marginal_likelihood.py   # ★ ML-II objective + gradients
-│   │   ├── kernels/                 # ★ swappable kernels
-│   │   │   ├── base.py
-│   │   │   ├── squared_exponential.py
-│   │   │   └── matern.py
-│   │   ├── acquisition/             # ★ swappable strategies
-│   │   │   ├── base.py
-│   │   │   ├── entropy_search.py    # the project goal
-│   │   │   ├── expected_improvement.py
-│   │   │   └── ucb.py
-│   │   └── objective.py             # Mp/Ts/effort → scalar cost
-│   │
-│   ├── simulation/
-│   │   ├── simulator.py
-│   │   ├── disturbances.py
-│   │   └── environment.py
-│   │
-│   ├── metrics/
-│   │   ├── stability_metrics.py     # overshoot Mp, settling time Ts
-│   │   ├── performance_metrics.py   # control effort, oscillation energy
-│   │   └── trajectory_entropy.py    # ← renamed (NOT the ES entropy)
-│   │
-│   ├── experiment/
-│   │   └── manager.py               # ExperimentManager
-│   │
-│   └── io/                          # replaces vague utils/
-│       ├── config_loader.py
-│       ├── logging.py
-│       └── plotting.py
-│
-├── configs/
-│   ├── default.yaml
-│   ├── schema.md                    # documents every config field
-│   ├── plant/
-│   ├── lqr/
-│   ├── kalman/
-│   ├── optimization/
-│   └── experiments/
-│
-├── experiments/
-│   ├── exp001_baseline/
-│   │   ├── config.yaml
-│   │   └── results/                 # gitignored run outputs
-│   └── exp002_entropy_search/
-│       ├── config.yaml
-│       └── results/
-│
-├── notebooks/                       # promoted out of experiments/
-│
-├── results/                         # gitignored: global artifacts 
-│
-├── tests/
-│   ├── unit/                        # mirrors src/ one-to-one
-│   ├── validation/                  # ★ cross-check vs scipy/contro
-│   │   ├── test_riccati_vs_scipy.py
-│   │   ├── test_cholesky_reconstruction.py
-│   │   └── test_kalman_vs_reference.py
-│   └── conftest.py
-│
-└── scripts/
-    ├── run_simulation.py
-    ├── train_optimizer.py
-    └── benchmark.py
+The code is a strict dependency stack — a lower layer never imports an upper
+one ([`docs/architecture/dependency_rules.md`](docs/architecture/dependency_rules.md)):
 
+```
+numerics → core → physical → dynamics → control ┐
+                                        estimation ┘→ simulation → metrics
+                                                                 → optimization → experiment
+                                                                       io ──────────┘ (leaf)
+```
+
+| Layer | What it holds |
+|---|---|
+| `numerics` | hand-written linear algebra, Riccati, integrators, optimiser, eigensolver |
+| `core` | domain value objects (`StateSpaceModel`, `LQGConfig`, `SearchSpace`, `Dataset`, `GPPosterior`, `SimulationResult`) |
+| `physical` | `DCMotor`, `ReactionWheel`, `ReactionWheelPendulum` (nonlinear plant + linearisation) |
+| `dynamics` | the ZOH stepper for the true plant and the linearise-and-discretise pipeline |
+| `control` | `LQRController` (gain via the discrete Riccati equation) |
+| `estimation` | `KalmanFilter` (predict/update + dual-DARE steady state) |
+| `simulation` | `SimulationEngine` — the closed-loop rollout and the optimiser's oracle |
+| `metrics` | overshoot, settling time, control effort, trajectory entropy |
+| `optimization` | GP surrogate, ML-II, kernels, acquisitions (EI/UCB/Entropy Search), the BO loop |
+| `experiment` / `io` | config-driven reproducible runs; YAML loading, logging, plotting |
+
+The theory each layer implements is written up in [`docs/theory/`](docs/theory/)
+(`model.md`, `lqr.md`, `kalman.md`, `optimization.md`, `notation.md`).
+
+## Documentation
+
+Full documentation is indexed in [`docs/README.md`](docs/README.md). New readers
+should start with the [**codebase overview**](docs/guides/codebase_overview.md) —
+a guided tour of every layer, the data flow, and the conventions. Topic guides
+cover the [hand-written numerics](docs/guides/numerics_from_scratch.md),
+[control and estimation](docs/guides/control_and_estimation.md), the
+[Bayesian-optimisation layer](docs/guides/bayesian_optimization_walkthrough.md),
+[running experiments](docs/guides/running_experiments.md), and an empirical
+[comparison of the acquisition functions](docs/guides/experiments.md).
+
+## Installation
+
+No build step — just install the dependencies (a virtual environment is
+recommended). Runtime needs only NumPy, PyYAML and matplotlib:
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt          # runtime
+pip install -r requirements-dev.txt      # + reference libs, to run the tests
+```
+
+## Running an experiment
+
+Tests and scripts run with `PYTHONPATH=src` (there is no installed package yet).
+
+```bash
+PYTHONPATH=src python scripts/run_experiment.py configs/default.yaml -o results/run01
+```
+
+The default config uses Entropy Search at full budget and takes a few minutes;
+for a quick first run, try `--no-plots` or an Expected-Improvement config. The
+companion analysis scripts are fast:
+
+```bash
+PYTHONPATH=src python scripts/frequency_analysis.py -o results/bode          # Bode diagrams
+PYTHONPATH=src python scripts/step_response.py      -o results/time_response # step / transient
+PYTHONPATH=src python scripts/compare_acquisitions.py --json results/cmp.json
+```
+
+This tunes the LQG weights on the configured plant and writes a full,
+reproducible run record (git hash, config, seed, metrics, trajectories, and
+diagnostic plots) to `results/run01/`. The configuration schema is documented
+field-by-field in [`configs/default.yaml`](configs/default.yaml), and the whole
+workflow — config → run → outputs, determinism, extending — is covered in
+[`docs/guides/running_experiments.md`](docs/guides/running_experiments.md).
+
+A run is fully determined by `(config, seed)`: re-running the same config
+reproduces the same result.
+
+## Tests
+
+```bash
+PYTHONPATH=src python -m pytest tests/ -q
+```
+
+- `tests/unit/` — properties of each primitive and component (no reference libs).
+- `tests/validation/` — cross-checks against SciPy / scikit-learn / filterpy to
+  a stated tolerance; the only place the banned libraries may be imported.
+
+## Repository layout
+
+```
+src/inverted_pendulum/   the package, one directory per layer above
+docs/theory/             the derivations each layer implements
+docs/architecture/       data contracts, dependency rules, class diagram
+docs/conventions/        numerical standards (tolerances, the no-library rule)
+docs/guides/             how to run experiments
+configs/                 experiment configurations (default.yaml is the schema)
+scripts/                 entry points (run_experiment.py)
+tests/                   unit and validation suites
 ```

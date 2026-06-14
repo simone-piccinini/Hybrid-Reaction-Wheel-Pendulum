@@ -1,0 +1,111 @@
+# Default experiment — reaction-wheel pendulum LQG tuning by Bayesian Optimisation.
+#
+# A run is fully determined by this file plus nothing else: the master `seed`
+# below threads through every stochastic step (AGENTS.md §7). Every field is
+# documented inline; this file doubles as the config schema.
+#
+# Load with `inverted_pendulum.io.config_loader.load_config`, run with
+# `inverted_pendulum.experiment.manager.ExperimentManager`.
+
+name: default
+
+# Master seed — the single source of all randomness in the run.
+seed: 0
+
+# ----------------------------------------------------------------------------
+# plant — the true nonlinear reaction-wheel pendulum (SI units; notation.md §2)
+# ----------------------------------------------------------------------------
+plant:
+  pendulum_mass: 0.30        # m_p  (kg)
+  pendulum_length: 0.15      # l_p  pivot -> centre of mass (m)
+  body_inertia: 0.02         # I_b  about the pivot (kg·m²)  [denominator, > 0]
+  pivot_friction: 0.01       # b_p  pivot viscous friction (N·m·s/rad)
+  gravity: 9.81              # g    (m/s²)
+  wheel:
+    mass: 0.10               #      (kg)
+    radius: 0.05             #      (m)
+    inertia: 1.0e-4          # I_w  about the spin axis (kg·m²)  [denominator]
+    friction_coefficient: 1.0e-4   # b_w  bearing friction (N·m·s/rad)
+  motor:
+    resistance: 2.0          # R_a  armature resistance (Ω)  [denominator, > 0]
+    torque_constant: 0.05    # K_t  (N·m/A)
+    back_emf_constant: 0.05  # K_e  (V·s/rad)
+    # max_voltage / max_current default to infinity (no saturation)
+
+# ----------------------------------------------------------------------------
+# simulation — one rollout (simulation/simulator.py)
+# ----------------------------------------------------------------------------
+simulation:
+  dt: 0.01                   # control sampling period Δt (s)
+  simulation_time: 10.0      # rollout horizon (s)  ->  T = 1000 samples
+  initial_state: [0.05, 0.0, 0.0, 0.0]   # [θ_p, θ̇_p, θ_w, θ̇_w]: a 0.05 rad tilt
+  divergence_angle: 1.5708   # |θ_p| past which the pendulum has fallen (π/2)
+  disturbances:              # the TRUE world noise (per-channel std), NOT W/V
+    process_std: [0.0, 1.0e-4, 0.0, 1.0e-2]   # on [θ_p, θ̇_p, θ_w, θ̇_w]
+    measurement_std: [1.0e-3, 1.0e-2]         # on the two sensors [θ_p, θ̇_w]
+    # initial_state_std: optional; omitted -> deterministic start
+
+# ----------------------------------------------------------------------------
+# objective — the scalar rollout cost y (notation.md §6)
+#   y = w_error·ITAE + w_control·∫u²dt
+#       + w_overshoot·max(0,(Mp-Mp_desired)/Mp_max)²
+#       + w_settling ·max(0,(Ts-Ts_desired)/Ts_max)²
+#       [ + w_saturation·max(0, max|u| - U_max)²   if U_max is set ]
+#   ITAE = ∫ t·|e(t)| dt judges the whole error history; the hinge penalties
+#   fire ONLY when a spec is violated (the controller is free to beat it).
+# ----------------------------------------------------------------------------
+objective:
+  Mp_desired: 5.0            # target overshoot M_p (%); no penalty at or below
+  Mp_max: 20.0               # max acceptable M_p — normalises the hinge [>0]
+  Ts_desired: 1.0            # target settling time T_s (s); no penalty at/below
+  Ts_max: 3.0                # max acceptable T_s — normalises the hinge [>0]
+  w_error: 100.0             # w_e — weight on ITAE (the main performance driver)
+  w_control: 0.1             # w_u — weight on control energy ∫u²dt (regulariser)
+  w_overshoot: 100.0         # w_p — overshoot penalty weight (keep LARGE)
+  w_settling: 100.0          # w_t — settling-time penalty weight (keep LARGE)
+  U_max: 24.0                # actuation limit (V); peaks beyond it are penalised
+  w_saturation: 10.0         # penalty weight on max|u| past U_max
+  # error_state_index: 0     # which state is e(t) for ITAE (default 0 = theta_p)
+  # penalty: optional; omitted -> core PENALTY (1e3) for a diverged rollout
+
+# ----------------------------------------------------------------------------
+# search_space — the BO box in log-space coordinates (data_contracts.md §2)
+#   packing order (length 11): log diag(Q)[4] | log diag(R)[1]
+#                              | log diag(W)[4] | log diag(V)[2]
+#   every dimension is log-space, so bounds are natural logs of the weights.
+# ----------------------------------------------------------------------------
+search_space:
+  lower_bounds: [ 0.0, -1.0, -7.0, -7.0,  -1.0,  -19.0, -15.0, -19.0, -11.0,  -15.0, -11.0]
+  upper_bounds: [ 4.0,  2.0, -2.0, -2.0,   2.0,   -8.0,  -8.0,  -8.0,  -6.0,   -8.0,  -6.0]
+  # log_scale: optional; omitted -> all True
+
+# ----------------------------------------------------------------------------
+# gp — the Gaussian-process surrogate (optimization/gaussian_process.py)
+# ----------------------------------------------------------------------------
+gp:
+  kernel: matern52           # 'matern52' | 'squared_exponential'
+  signal_variance: 1.0       # σ_f²  (initial; refined by ML-II)
+  noise_variance: 1.0e-2     # σ_n²  in standardised target units (initial)
+  # lengthscales: optional; omitted -> ones(d)
+
+# ----------------------------------------------------------------------------
+# acquisition — the strategy proposing each next θ
+# ----------------------------------------------------------------------------
+acquisition:
+  kind: entropy_search       # 'entropy_search' | 'expected_improvement' | 'ucb'
+  params:                    # forwarded verbatim to the acquisition constructor
+    n_optimum_samples: 200
+    n_representers: 50
+    n_fantasies: 10
+    n_candidates: 200
+  # ucb example:                 kind: ucb,                params: {beta: 2.0}
+  # expected_improvement example: kind: expected_improvement, params: {n_candidates: 512}
+
+# ----------------------------------------------------------------------------
+# optimization — the outer-loop budget (optimization.md §5)
+# ----------------------------------------------------------------------------
+optimization:
+  n_initial: 8               # Latin-hypercube initial designs
+  n_iterations: 20           # acquisition-driven steps  (total budget = n_init + this)
+  n_rollouts_per_eval: 1     # n_r rollouts averaged per oracle query
+  optimize_hyperparameters: true   # refit GP hyperparameters by ML-II each step
