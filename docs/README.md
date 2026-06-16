@@ -36,6 +36,9 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   physically build the pendulum (motor, driver, sensors, power, mechanics),
   alternatives within a €100–150 budget, and the ESP32 ↔ SimpleFOCMini ↔ AS5600
   wiring/pinout.
+- [Sensors, the I²C bus, and the magnets](hardware/sensors_and_i2c.md) — why two
+  AS5600 are needed, how I²C works and the fixed-address clash (and its fixes),
+  and what the diametric magnets are for.
 
 ## Theory (the derivations each layer implements)
 
