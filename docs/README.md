@@ -39,6 +39,10 @@ start with the **codebase overview**, then dip into theory or guides as needed.
 - [Sensors, the I²C bus, and the magnets](hardware/sensors_and_i2c.md) — why two
   AS5600 are needed, how I²C works and the fixed-address clash (and its fixes),
   and what the diametric magnets are for.
+- [Sizing the pendulum](hardware/sizing_the_pendulum.md) — the engineering
+  reasoning and the math behind how long the arm can be for a given motor
+  (torque vs gravity, wheel saturation, margins) — the method an engineer uses
+  for any robot / drone / pendulum.
 
 ## Theory (the derivations each layer implements)
 
