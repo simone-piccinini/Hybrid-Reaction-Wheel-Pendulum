@@ -102,7 +102,8 @@ cannot share one bus**. Three ways out:
 3. **Mixed sensors:** use one AS5600 (motor, I²C) + one **MPU6050** (pendulum,
    address `0x68` → no clash), at the cost of sensor fusion for `θ_p`.
 
-This BOM uses option 1.
+This BOM uses option 1. (Full explanation of the sensors, the bus, and the
+magnets: [sensors_and_i2c.md](sensors_and_i2c.md).)
 
 ### Pin map (ESP32 DevKit v1)
 
