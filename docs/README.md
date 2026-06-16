@@ -30,6 +30,13 @@ start with the **codebase overview**, then dip into theory or guides as needed.
 - [Experiments](guides/experiments.md) — an empirical comparison of the three
   acquisition functions, reproducible from `scripts/compare_acquisitions.py`.
 
+## Hardware
+
+- [Bill of Materials](hardware/bill_of_materials.md) — the complete parts list to
+  physically build the pendulum (motor, driver, sensors, power, mechanics),
+  alternatives within a €100–150 budget, and the ESP32 ↔ SimpleFOCMini ↔ AS5600
+  wiring/pinout.
+
 ## Theory (the derivations each layer implements)
 
 - [notation.md](theory/notation.md) — the symbol ↔ code glossary. **Consult
