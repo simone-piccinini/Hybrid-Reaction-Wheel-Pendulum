@@ -43,6 +43,10 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   reasoning and the math behind how long the arm can be for a given motor
   (torque vs gravity, wheel saturation, margins) — the method an engineer uses
   for any robot / drone / pendulum.
+- [Designing the reaction wheel](hardware/reaction_wheel_design.md) — sizing the
+  wheel from its moment of inertia `I_w` (momentum capacity `H_max = I_w·ω_max`),
+  the "mass at the rim" rule, recommended dimensions, the concentric outrunner
+  mounting, and modelling it in Onshape.
 
 ## Theory (the derivations each layer implements)
 
