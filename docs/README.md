@@ -29,6 +29,11 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   transient metrics, and modal analysis (poles → `ω_n`, `ζ`), linear vs nonlinear.
 - [Experiments](guides/experiments.md) — an empirical comparison of the three
   acquisition functions, reproducible from `scripts/compare_acquisitions.py`.
+- [The Analysis Scripts](guides/analysis_scripts.md) — a tour of every entry
+  point in `scripts/`, with a deep dive on **`stability_margins.py`**: why the
+  open-loop LQG gain (phase/gain margin, Doyle's caveat) predicts how the
+  controller survives real-hardware latency and gain drift — the script that
+  tells you the truth a clean simulation hides.
 
 ## Hardware
 
@@ -47,6 +52,13 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   wheel from its moment of inertia `I_w` (momentum capacity `H_max = I_w·ω_max`),
   the "mass at the rim" rule, recommended dimensions, the concentric outrunner
   mounting, and modelling it in Onshape.
+
+## Papers & analyses
+
+- [Robustness of the Tuned LQG on the Measured Build](papers/robustness_lqg_measured.md)
+  — a stability-margin study of the BO-tuned controller for the real,
+  CAD/measured pendulum: gain-robust (6.85 dB, +120 %) but delay-fragile (11.6°,
+  ~57 ms), with Doyle's caveat and what it means for the firmware.
 
 ## Theory (the derivations each layer implements)
 

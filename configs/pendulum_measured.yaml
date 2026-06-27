@@ -1,0 +1,81 @@
+# Measured/Onshape hardware parameters — real bench build.
+# Plant masses/inertias from CAD + measurement; motor from the datasheet
+# (R_a=10 Ω, K_t=K_e=0.037, 12 V rail). Everything else follows the default
+# schema (configs/default.yaml). A run is fully determined by this file + seed.
+
+name: pendulum_measured
+
+seed: 0
+
+# ----------------------------------------------------------------------------
+# plant — the real reaction-wheel pendulum (measured / from CAD)
+# ----------------------------------------------------------------------------
+plant:
+  pendulum_mass: 0.125       # measured tip total (kg)
+  pendulum_length: 0.15      # 15 cm arm, pivot -> CoM (m)
+  body_inertia: 0.00281      # ≈ m_tip·L² = 0.125 × 0.15² (kg·m²)
+  pivot_friction: 0.01       # b_p (N·m·s/rad)  [default; not measured]
+  gravity: 9.81
+  wheel:
+    mass: 0.064              # from Onshape (kg)
+    radius: 0.05             # (m)
+    inertia: 1.04e-4         # from Onshape (kg·m²)
+    friction_coefficient: 1.0e-4
+  motor:
+    resistance: 10.0         # R_a (Ω)
+    torque_constant: 0.037   # K_t (N·m/A)
+    back_emf_constant: 0.037 # K_e (V·s/rad)
+    max_voltage: 12.0        # driver rail (V)
+
+# ----------------------------------------------------------------------------
+# simulation (default schema)
+# ----------------------------------------------------------------------------
+simulation:
+  dt: 0.01
+  simulation_time: 10.0
+  initial_state: [0.05, 0.0, 0.0, 0.0]   # a 0.05 rad tilt
+  divergence_angle: 1.5708
+  disturbances:
+    process_std: [0.0, 1.0e-4, 0.0, 1.0e-2]
+    measurement_std: [1.0e-3, 1.0e-2]
+
+# ----------------------------------------------------------------------------
+# objective — default targets, with U_max matched to the 12 V rail
+# ----------------------------------------------------------------------------
+objective:
+  Mp_desired: 5.0
+  Mp_max: 20.0
+  Ts_desired: 1.0
+  Ts_max: 3.0
+  w_error: 100.0
+  w_control: 0.1
+  w_overshoot: 100.0
+  w_settling: 100.0
+  U_max: 12.0                # match the 12 V rail; penalise saturation
+  w_saturation: 10.0
+
+# ----------------------------------------------------------------------------
+# search_space — 11-D log-space box over vec(Q, R, W, V) (default)
+# ----------------------------------------------------------------------------
+search_space:
+  lower_bounds: [ 0.0, -1.0, -7.0, -7.0,  -1.0,  -19.0, -15.0, -19.0, -11.0,  -15.0, -11.0]
+  upper_bounds: [ 4.0,  2.0, -2.0, -2.0,   2.0,   -8.0,  -8.0,  -8.0,  -6.0,   -8.0,  -6.0]
+
+gp:
+  kernel: matern52
+  signal_variance: 1.0
+  noise_variance: 1.0e-2
+
+acquisition:
+  kind: entropy_search
+  params:
+    n_optimum_samples: 200
+    n_representers: 50
+    n_fantasies: 10
+    n_candidates: 200
+
+optimization:
+  n_initial: 8
+  n_iterations: 20
+  n_rollouts_per_eval: 1
+  optimize_hyperparameters: true
