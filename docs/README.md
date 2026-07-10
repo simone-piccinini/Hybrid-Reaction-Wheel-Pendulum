@@ -55,6 +55,11 @@ start with the **codebase overview**, then dip into theory or guides as needed.
 
 ## Papers & analyses
 
+- [**Papers index**](papers/README.md) — the literature this project is built
+  on, starting with the inspiration:
+  [Marco et al., *Automatic LQR Tuning Based on Gaussian Process Global
+  Optimization*, ICRA 2016 (arXiv:1605.01950)](https://arxiv.org/abs/1605.01950)
+  — and how each reference maps onto the code.
 - [Robustness of the Tuned LQG on the Measured Build](papers/robustness_lqg_measured.md)
   — a stability-margin study of the BO-tuned controller for the real,
   CAD/measured pendulum: gain-robust (6.85 dB, +120 %) but delay-fragile (11.6°,
