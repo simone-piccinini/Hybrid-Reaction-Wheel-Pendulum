@@ -1,56 +1,43 @@
 # Hybrid Reaction-Wheel Pendulum
 
-**Automatic LQG tuning by Entropy Search — a from-scratch implementation of
-[Marco et al., *"Automatic LQR Tuning Based on Gaussian Process Global
-Optimization"*, ICRA 2016](https://arxiv.org/abs/1605.01950), on an inverted
-reaction-wheel pendulum.**
 
-An inverted pendulum carries a motor-driven reaction wheel; spinning the wheel
-is the *only* way to keep it upright. The controller is classical — a **Kalman
-filter** estimates the state, an **LQR** law stabilises it (together: **LQG**)
-— but classical design leaves a hard, human problem open: choosing the four
-weight matrices `(Q, R, W, V)` that decide how the controller trades regulation
-tightness against control effort, and trust in the model against trust in the
-sensors.
+## Project Goals
 
-**The key of this project is closing that loop automatically.** Following the
-paper, controller tuning is treated as a black-box optimisation problem: run a
-closed-loop *simulation*, score the resulting trajectory with a single cost,
-and let **Bayesian optimisation** — a hand-written **Gaussian-process
-surrogate** with an **Entropy Search** acquisition — decide which weights to
-try next. Entropy Search picks each evaluation to maximise *information about
-the location of the optimum*, so good weights are found in tens of rollouts,
-not thousands.
+This project has three main goals:
 
-```
-              ┌──────────────────────────────────────────────────┐
-              │              BAYESIAN OPTIMISATION               │
-              │      GP surrogate (ML-II) + Entropy Search       │
-              └────────▲──────────────────────────┬──────────────┘
-       rollout cost    │                          │   next candidate
-       y = f(θ)        │                          │   θ = log(Q, R, W, V)   (11-D)
-              ┌────────┴──────────────────────────▼──────────────┐
-              │              CLOSED-LOOP SIMULATION              │
-              │                                                  │
-              │    noisy sensors ──▶ Kalman filter ──▶ x̂         │
-              │    u = −K x̂ (LQR) ──▶ DC motor ──▶ reaction wheel │
-              │                    ──▶ nonlinear pendulum plant  │
-              └──────────────────────────────────────────────────┘
-```
+- **1)** Show the pipeline and the base theory of controlling an inversed wheeled pendulum controlled by a LQR + Kalman Filter.
+- **2)** Tuning the hyperparameters of the controller using advanced methods of optimization (bayesian optimization throught entropy search)
+- **3)** Bringing the project to life, hardware decisions, construction of the body, and result.
 
-"Hybrid" is the project's trajectory: everything is developed and tuned in
-simulation, but against a plant whose parameters come from the *real* bench
-build — CAD inertias, measured masses, the actual motor
-([`configs/pendulum_measured.yaml`](configs/pendulum_measured.yaml),
-[`docs/hardware/`](docs/hardware/)) — so the tuned controller is meant to
-transfer to hardware.
+---
+## Inspiration
 
-The point of the project is the *derivation and implementation*: correctness,
-transparency, and traceability to the theory matter more than raw speed.
+The idea for creating this project came studying from the course **CMU Optimal Control 16-745**.
+
+- **Course:** CMU Optimal Control 16-745
+- **Instructor:** Zachary Manchester
+- **Website:** https://optimalcontrol.ri.cmu.edu/
+
+So many of the proofs and theoretical results are taken from the course taught by Zachary Manchester.
 
 ---
 
-## The golden rule: no library that solves the problem
+## Optimization
+
+For the optimization part of the project, I decided to take this route after having read the paper:
+
+- **Entropy Search for Information-Efficient Global Optimization**
+  - Philipp Hennig and Christian J. Schuler
+
+I decided to use this method because it's less computationally expensive than the classical optimization method and it has been proven to bring good result, especially on the paper:
+
+- **Automatic LQR Tuning Based on Gaussian Process Global Optimization**
+  - Alonso Marco, Philipp Hennig, Jeannette Bohg, Stefan Schaal, and Sebastian Trimpe
+
+Which shows how to tune an LQR controller automatically using entropy search for global optimization.
+
+
+## No library that solves the problem
 
 Every numerical algorithm is written from scratch in
 [`src/inverted_pendulum/numerics/`](src/inverted_pendulum/numerics/) — Cholesky
