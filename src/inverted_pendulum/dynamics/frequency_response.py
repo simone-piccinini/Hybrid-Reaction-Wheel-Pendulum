@@ -30,6 +30,7 @@ For a discrete model the analogous substitution is ``z = e^{jωΔt}`` and
 
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 
 import numpy as np
@@ -311,3 +312,44 @@ def log_frequencies(omega_min: float, omega_max: float, n_points: int = 400) -> 
     if n_points < 2:
         raise ValueError("n_points must be >= 2")
     return np.logspace(np.log10(omega_min), np.log10(omega_max), n_points)
+
+
+def loop_margins(
+    plant: StateSpaceModel,
+    gain_K,
+    gain_L,
+    *,
+    omega_min: float = 1e-2,
+    n_points: int = 2000,
+) -> StabilityMargins:
+    """Gain/phase margins of the LQG loop ``L = −K_c·G`` for a discrete plant.
+
+    A one-call convenience over :func:`log_frequencies`,
+    :func:`loop_transfer_function`, and :func:`stability_margins` — the exact
+    sequence ``scripts/stability_margins.py`` runs, factored out so both the
+    script and the simulator use one implementation (the deduplication flagged in
+    ``docs/papers/robustness_lqg_measured.md`` §5). The grid runs to just below the
+    Nyquist frequency ``0.9·π/Δt``.
+
+    The ``plant`` must be the **discrete, controllable + observable** model on
+    which the steady-state LQG is defined — i.e. with any decoupled/undetectable
+    mode already dropped (the wheel angle, ``KEEP = [0,1,3]``; see the module
+    docstring of :func:`loop_transfer_function`). ``gain_K`` is the reduced LQR
+    gain and ``gain_L`` the reduced steady-state Kalman gain.
+
+    Returns
+    -------
+    StabilityMargins
+        Gain/phase margins and their crossover frequencies. A loop that never
+        crosses 0 dB / −180° yields an infinite phase / gain margin (the
+        ``StabilityMargins`` convention), which downstream reads as "robust".
+    """
+    if not isinstance(plant, StateSpaceModel):
+        raise TypeError("plant must be a StateSpaceModel")
+    if not plant.is_discrete:
+        raise ValueError("loop_margins expects a discrete plant model")
+    omega = log_frequencies(omega_min, 0.9 * np.pi / plant.dt, n_points)
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")  # log10(0)/divide at crossovers are handled
+        loop = loop_transfer_function(plant, gain_K, gain_L, omega)
+    return stability_margins(omega, loop)

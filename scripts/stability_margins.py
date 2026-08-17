@@ -70,7 +70,9 @@ def main() -> None:
     K = LQRController.from_model(reduced, Q_RED, R_LQR).K_gain
     L = steady_state_kalman_gain(reduced, W_RED, V_MEAS).L_gain
 
-    # loop gain L(jω) up to just below the Nyquist frequency π/dt
+    # loop gain L(jω) up to just below the Nyquist frequency π/dt. The margins
+    # match dynamics.frequency_response.loop_margins (the same sequence the
+    # SimulationEngine records per design); the curve is kept for the Bode plot.
     omega = log_frequencies(1e-2, 0.9 * np.pi / dt, 2000)
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")

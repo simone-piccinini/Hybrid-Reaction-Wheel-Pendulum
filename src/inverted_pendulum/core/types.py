@@ -443,6 +443,15 @@ class SimulationResult:
     If ``diverged`` is ``True`` the pendulum fell / the state blew up; the
     ``ObjectiveFunction`` then assigns a large *finite* penalty rather than
     ``inf``/``nan`` (``data_contracts.md`` §3, ``numerical_standards.md`` §7).
+
+    ``phase_margin_deg`` / ``gain_margin_db`` record the stability margins of the
+    LQG loop the design realises (``docs/theory/kalman.md`` "detectability
+    caveat"; ``scripts/stability_margins.py``). They are a property of the
+    **design**, not the seeded rollout, so they are identical across repeated
+    rollouts of one config. ``nan`` means "not computed" (or the reduced design
+    failed); an *infinite* gain margin (a loop that never reaches −180°) reads as
+    fully gain-robust. The ``ObjectiveFunction`` may add a hinge penalty when a
+    finite margin falls below its threshold (``notation.md`` §6 extension).
     """
 
     time: np.ndarray
@@ -453,6 +462,8 @@ class SimulationResult:
     seed: int
     diverged: bool
     config: LQGConfig
+    phase_margin_deg: float = float("nan")
+    gain_margin_db: float = float("nan")
 
     def __post_init__(self) -> None:
         if not isinstance(self.config, LQGConfig):
@@ -461,6 +472,8 @@ class SimulationResult:
             raise TypeError("seed must be an integer")
         if not isinstance(self.diverged, (bool, np.bool_)):
             raise TypeError("diverged must be a bool")
+        object.__setattr__(self, "phase_margin_deg", float(self.phase_margin_deg))
+        object.__setattr__(self, "gain_margin_db", float(self.gain_margin_db))
 
         time = np.array(self.time, dtype=np.float64)
         if time.ndim != 1 or time.shape[0] < 1:

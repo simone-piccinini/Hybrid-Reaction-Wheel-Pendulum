@@ -157,8 +157,10 @@ class ObjectiveConfig:
     """Cost-function settings (``notation.md`` §6).
 
     The cost is ``w_error·ITAE + w_control·∫u² + hinge penalties on M_p, T_s``
-    (and optionally on the peak input past ``U_max``). The hinge penalties are
-    normalised by the maximum-acceptable values ``Mp_max``/``Ts_max``.
+    (and optionally on the peak input past ``U_max``, and on the LQG loop's phase
+    /gain margins below ``PM_min``/``GM_min``). The hinge penalties are normalised
+    by the maximum-acceptable values ``Mp_max``/``Ts_max`` (and ``PM_min``/``GM_min``
+    for the robustness term, which is off by default — weights 0).
     """
 
     Mp_desired: float
@@ -171,6 +173,10 @@ class ObjectiveConfig:
     w_settling: float = 100.0
     U_max: float | None = None
     w_saturation: float = 100.0
+    PM_min: float = 30.0
+    GM_min: float = 6.0
+    w_phase_margin: float = 0.0
+    w_gain_margin: float = 0.0
     error_state_index: int = 0
     penalty: float | None = None  # None → ObjectiveFunction's PENALTY default
 
@@ -189,6 +195,10 @@ class ObjectiveConfig:
             w_settling=float(d.get("w_settling", 100.0)),
             U_max=None if u_max is None else float(u_max),
             w_saturation=float(d.get("w_saturation", 100.0)),
+            PM_min=float(d.get("PM_min", 30.0)),
+            GM_min=float(d.get("GM_min", 6.0)),
+            w_phase_margin=float(d.get("w_phase_margin", 0.0)),
+            w_gain_margin=float(d.get("w_gain_margin", 0.0)),
             error_state_index=int(d.get("error_state_index", 0)),
             penalty=None if penalty is None else float(penalty),
         )

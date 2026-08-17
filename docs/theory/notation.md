@@ -125,7 +125,13 @@ y \;=\; w_e\,\underbrace{\int_0^{T} t\,\lvert e(t)\rvert\,dt}_{\text{ITAE}}
 \;+\; w_t\left[\max\!\Big(0,\tfrac{T_s - T_s^{\text{des}}}{T_s^{\max}}\Big)\right]^2
 $$
 
-with an optional actuation-saturation penalty $w_{\text{sat}}\big[\max(0,\;\max_t\lvert u(t)\rvert - U_{\max})\big]^2$.
+with an optional actuation-saturation penalty $w_{\text{sat}}\big[\max(0,\;\max_t\lvert u(t)\rvert - U_{\max})\big]^2$
+and an optional **robustness** penalty on the LQG loop's stability margins,
+$w_{\text{PM}}\big[\max(0,\tfrac{\mathrm{PM}_{\min}-\mathrm{PM}}{\mathrm{PM}_{\min}})\big]^2 + w_{\text{GM}}\big[\max(0,\tfrac{\mathrm{GM}_{\min}-\mathrm{GM}}{\mathrm{GM}_{\min}})\big]^2$
+— the *reversed* hinge (penalising a margin *below* its floor), off by default.
+Unlike every other term it is read from the design's loop gain, not the rollout
+trajectory; it steers the search away from the delay-fragile controllers LQG
+permits (Doyle 1978; `docs/papers/robustness_lqg_measured.md`).
 
 - **ITAE** weights *late* error by $t$, so minimising it speeds up settling and
   drives the steady-state error to zero — judging the whole history, not two

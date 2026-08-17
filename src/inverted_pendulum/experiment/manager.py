@@ -159,6 +159,8 @@ class ExperimentManager:
             w_error=o.w_error, w_control=o.w_control,
             w_overshoot=o.w_overshoot, w_settling=o.w_settling,
             U_max=o.U_max, w_saturation=o.w_saturation,
+            PM_min=o.PM_min, GM_min=o.GM_min,
+            w_phase_margin=o.w_phase_margin, w_gain_margin=o.w_gain_margin,
             error_state_index=o.error_state_index,
         )
         if o.penalty is not None:

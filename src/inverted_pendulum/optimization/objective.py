@@ -26,6 +26,14 @@ with, term by term:
   spike and the optimiser discards those hyper-parameters.
 - **Saturation penalty** (optional) — a hinge on the peak actuation past a
   hardware limit ``U_max``.
+- **Robustness penalty** (optional) — asymmetric hinges on the LQG loop's phase
+  and gain margins, firing when a margin falls *below* its threshold (more margin
+  is better — the reverse direction of the overshoot/settling hinges). This is
+  the one term measured in the frequency domain, on the design's loop gain rather
+  than the rollout trajectory; it steers the optimiser away from the delay-fragile
+  controllers LQG permits (Doyle 1978). Off by default (weights 0). See
+  ``docs/papers/robustness_lqg_measured.md`` and
+  ``docs/implementation_notes/margin_penalty_design.md``.
 
 A diverged rollout is mapped to the large **finite** ``PENALTY`` — never
 ``inf``/``nan``, which would poison the GP surrogate (``data_contracts.md`` §3;
@@ -73,6 +81,13 @@ class ObjectiveFunction:
         ``max|u|`` past ``U_max`` is added with weight ``w_saturation``.
     w_saturation : float
         Penalty weight on the saturation hinge (used only when ``U_max`` is set).
+    PM_min, GM_min : float
+        Robustness thresholds: minimum acceptable phase margin ``PM_min`` (deg)
+        and gain margin ``GM_min`` (dB) — the comfort bars (30–45°, 6 dB). Used
+        both as the hinge knee and its normaliser (> 0 — they are denominators).
+    w_phase_margin, w_gain_margin : float
+        Penalty weights on the phase- and gain-margin shortfalls. Default 0 →
+        the robustness term is off and the cost is unchanged.
     error_state_index : int
         Which true-state column is the regulated error ``e(t)`` for the ITAE
         (default 0 = ``theta_p``, the pendulum angle).
@@ -90,20 +105,27 @@ class ObjectiveFunction:
     w_settling: float = 100.0
     U_max: float | None = None
     w_saturation: float = 100.0
+    PM_min: float = 30.0
+    GM_min: float = 6.0
+    w_phase_margin: float = 0.0
+    w_gain_margin: float = 0.0
     error_state_index: int = 0
     penalty: float = PENALTY
 
     def __post_init__(self) -> None:
         for name in ("Mp_desired", "Ts_desired", "Mp_max", "Ts_max", "w_error",
                      "w_control", "w_overshoot", "w_settling", "w_saturation",
+                     "PM_min", "GM_min", "w_phase_margin", "w_gain_margin",
                      "penalty"):
             object.__setattr__(self, name, float(getattr(self, name)))
         if self.U_max is not None:
             object.__setattr__(self, "U_max", float(self.U_max))
         if self.Mp_max <= 0.0 or self.Ts_max <= 0.0:
             raise ValueError("Mp_max and Ts_max must be > 0 (they are denominators)")
+        if self.PM_min <= 0.0 or self.GM_min <= 0.0:
+            raise ValueError("PM_min and GM_min must be > 0 (they are denominators)")
         if min(self.w_error, self.w_control, self.w_overshoot, self.w_settling,
-               self.w_saturation) < 0.0:
+               self.w_saturation, self.w_phase_margin, self.w_gain_margin) < 0.0:
             raise ValueError("all weights must be >= 0")
         if self.U_max is not None and self.U_max <= 0.0:
             raise ValueError("U_max must be > 0 when set")
@@ -155,4 +177,23 @@ class ObjectiveFunction:
         if self.U_max is not None and result.controls.size:
             peak_input = float(np.max(np.abs(result.controls)))
             cost += self.w_saturation * max(0.0, peak_input - self.U_max) ** 2
+        cost += self._margin_penalty(result)
         return float(cost)
+
+    def _margin_penalty(self, result: SimulationResult) -> float:
+        """Robustness hinge on the design's LQG loop margins (0 unless enabled).
+
+        Fires when a *finite* margin falls below its threshold — the reversed
+        hinge direction, normalised by the threshold to stay scale-free. A
+        non-finite margin (``nan`` = not computed; ``inf`` gain margin = fully
+        gain-robust) contributes 0, keeping the cost finite (``optimization.md``
+        §6). Zero when both weights are 0 (the default), so the cost is unchanged.
+        """
+        penalty = 0.0
+        pm = result.phase_margin_deg
+        gm = result.gain_margin_db
+        if self.w_phase_margin and math.isfinite(pm):
+            penalty += self.w_phase_margin * max(0.0, (self.PM_min - pm) / self.PM_min) ** 2
+        if self.w_gain_margin and math.isfinite(gm):
+            penalty += self.w_gain_margin * max(0.0, (self.GM_min - gm) / self.GM_min) ** 2
+        return penalty
