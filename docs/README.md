@@ -73,6 +73,9 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   linearisation.
 - [lqr.md](theory/lqr.md) — the LQR controller via the discrete Riccati equation.
 - [kalman.md](theory/kalman.md) — the Kalman filter (and the Riccati duality).
+- [swingup.md](theory/swingup.md) — energy-shaping swing-up from hanging and the
+  hand-off to the balancing LQG (the one nonlinear, global controller), with the
+  torque-vs-friction feasibility condition.
 - [optimization.md](theory/optimization.md) — the GP Bayesian optimisation with
   Entropy Search (the binding specification of the optimisation layer).
 

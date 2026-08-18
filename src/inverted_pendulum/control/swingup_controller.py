@@ -6,7 +6,9 @@ where the LQR (``docs/theory/lqr.md``) can catch and balance it. The two run in
 sequence under a switching supervisor (``scripts/swing_up.py``): swing-up until
 near upright, then hand off to the balancing LQG. The linear model everything
 else uses is a small-angle approximation valid only near ``theta_p = 0``
-(``model.md``); swing-up lives on the *full nonlinear* plant.
+(``model.md``); swing-up lives on the *full nonlinear* plant. The full
+derivation, the hand-off, and the torque-vs-friction feasibility condition are
+in ``docs/theory/swingup.md``.
 
 Method — **energy shaping** (Astrom & Furuta, "Swinging up a pendulum by energy
 control", *Automatica* 2000; adapted to the reaction wheel). The pendulum's
