@@ -45,8 +45,8 @@ simulation:
 # delay-fragile (PM 11.6°, ~57 ms), the textbook Doyle-1978 LQG trap. The
 # phase/gain-margin hinges steer the search toward controllers that keep
 # headroom on real hardware (docs/papers/robustness_lqg_measured.md §6).
-# Weights are a starting point — calibrate on a two-stage run (see the design
-# note, docs/implementation_notes/margin_penalty_design.md §8).
+# Weights are a starting point — calibrate on a two-stage run (the measured
+# A/B of this term is docs/papers/robustness_lqg_measured.md §7).
 # ----------------------------------------------------------------------------
 objective:
   Mp_desired: 5.0

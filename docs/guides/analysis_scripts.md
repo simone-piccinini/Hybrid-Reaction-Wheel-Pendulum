@@ -25,6 +25,7 @@ noted per script) and `-o OUTDIR`.
 | [`frequency_analysis.py`](../../scripts/frequency_analysis.py) | Where does the **open-loop plant** resonate? | Bode of $G$ |
 | [`step_response.py`](../../scripts/step_response.py) | How does the **closed loop** move in time — poles, overshoot, settling? | time domain |
 | [`stability_margins.py`](../../scripts/stability_margins.py) | **How much delay / gain error can the real loop survive before it falls?** | Bode of $L=GK$ |
+| [`swing_up.py`](../../scripts/swing_up.py) | Can it get from *hanging* to upright, and will the LQG catch it? | nonlinear, global |
 
 The first three are the **optimisation** story (covered in
 [running_experiments.md](running_experiments.md) and
@@ -55,6 +56,17 @@ Draws one Bode diagram per input→output channel of the **open-loop plant** $G$
 It exposes the unstable pendulum mode (~4 rad/s) and the wheel-angle integrator.
 This is the *plant*, with no controller in the loop. Full derivation:
 [frequency_analysis.md](frequency_analysis.md) §§1–6.
+
+### `swing_up.py` — the whole maneuver, on the nonlinear plant
+Everything else in this list lives near the upright equilibrium, where the
+small-angle linear model is valid. This one does not: it runs **energy-shaping
+swing-up** from hanging ($\theta_p=\pi$), a switching supervisor that latches
+near upright, and then the balancing **LQG** that catches and holds it — all on
+the full nonlinear plant. It also front-loads a **feasibility check**: comparing
+the peak reaction torque against the speed the pendulum needs at the bottom, it
+will tell you the maneuver is *impossible* on the configured plant, and name the
+pivot-friction threshold that would make it possible, rather than silently
+failing to swing up. Theory: [swingup.md](../theory/swingup.md).
 
 ### `step_response.py` — the closed loop in time
 Designs an LQR, forms $A_{cl}=A-BK$, and reports the closed-loop **modes**
@@ -181,12 +193,15 @@ LQG, and end up with the 7° margin above. There is no shortcut: the only way to
 *know* the real robustness is to form $L=GK$ for the **full** LQG and look — which
 is exactly what this script does.
 
-This is also a direct argument for the project's optimisation goal. The tuner
-minimises a *simulated* cost, and nothing in that cost yet rewards robustness, so
-it is free to return a controller with a 7° margin. Folding a **margin
-constraint** (or a penalty for PM/GM below threshold) into the objective would
-make the Bayesian optimiser search for controllers that survive contact with
-hardware — the natural next step this script motivates.
+This is also a direct argument for the project's optimisation goal, and the
+argument was acted on. The tuner minimises a *simulated* cost; while that cost
+said nothing about robustness it was free to return a controller with a 7°
+margin. The objective now carries an optional **margin penalty** — a hinge on
+PM/GM below their floors, computed on this very loop gain — so the Bayesian
+optimiser can be told to search for controllers that survive contact with
+hardware. Turning it on roughly doubles the measured build's delay budget; the
+A/B, and where it still falls short, is
+[§7 of the robustness study](../papers/robustness_lqg_measured.md).
 
 ### 2.5 Reading the figure
 
@@ -210,15 +225,18 @@ shown geometrically.
 ## 3. How they fit together
 
 ```
-frequency_analysis.py   →  the PLANT alone        (is it unstable? where?)
-step_response.py        →  the CLOSED LOOP in time (does it settle nicely?)
+frequency_analysis.py   →  the PLANT alone         (is it unstable? where?)
+step_response.py        →  the CLOSED LOOP in time  (does it settle nicely?)
 stability_margins.py    →  the CLOSED LOOP's ROBUSTNESS (will it survive hardware?)
 run_experiment.py …     →  TUNE the weights that all three then analyse
+swing_up.py             →  the WHOLE MANEUVER, nonlinear (can it even get up there?)
 ```
 
 A complete study is: tune the weights (`run_experiment.py`), confirm the
-transient (`step_response.py`), **and check the margins
-(`stability_margins.py`) before trusting any of it on a real pendulum.**
+transient (`step_response.py`), **check the margins (`stability_margins.py`)
+before trusting any of it on a real pendulum** — and, if the pendulum has to
+start from hanging rather than being placed upright by hand, confirm the
+maneuver is feasible at all (`swing_up.py`).
 
 ---
 

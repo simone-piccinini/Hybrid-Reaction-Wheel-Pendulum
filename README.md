@@ -104,7 +104,7 @@ numerics → core → physical → dynamics → control ┐
 | `core` | domain value objects (`StateSpaceModel`, `LQGConfig`, `SearchSpace`, `Dataset`, `GPPosterior`, `SimulationResult`) |
 | `physical` | `DCMotor`, `ReactionWheel`, `ReactionWheelPendulum` (nonlinear plant + linearisation) |
 | `dynamics` | ZOH stepping, linearise-and-discretise, frequency & time response |
-| `control` | `LQRController` (gain via the discrete Riccati equation) |
+| `control` | `LQRController` (gain via the discrete Riccati equation) + `EnergySwingUpController` (the one nonlinear, global law) |
 | `estimation` | `KalmanFilter` (predict/update + dual-DARE steady state) |
 | `simulation` | `SimulationEngine` — the closed-loop rollout, the optimiser's oracle |
 | `metrics` | overshoot, settling time, control effort, trajectory entropy |
@@ -127,7 +127,8 @@ numerics → core → physical → dynamics → control ┐
 │   ├── compare_acquisitions.py    Entropy Search vs EI vs UCB benchmark
 │   ├── frequency_analysis.py      Bode diagrams of the open-loop plant
 │   ├── step_response.py           closed-loop poles & transient metrics
-│   └── stability_margins.py       gain/phase margins of the LQG loop
+│   ├── stability_margins.py       gain/phase margins of the LQG loop
+│   └── swing_up.py                hanging → upright, then LQG catch
 ├── docs/
 │   ├── theory/                 the derivations each layer implements
 │   ├── guides/                 practical walkthroughs (start here)
@@ -178,6 +179,13 @@ PYTHONPATH=src python scripts/stability_margins.py  configs/pendulum_measured.ya
 PYTHONPATH=src python scripts/compare_acquisitions.py --json results/cmp.json
 ```
 
+And to run the *full* maneuver — swing up from hanging, then let the LQG catch
+and hold it, all on the nonlinear plant:
+
+```bash
+PYTHONPATH=src python scripts/swing_up.py configs/pendulum_measured.yaml -o results/swingup
+```
+
 The whole workflow — config → run → outputs, determinism, extending — is
 covered in [`docs/guides/running_experiments.md`](docs/guides/running_experiments.md);
 every script is explained in
@@ -186,7 +194,7 @@ every script is explained in
 ## Tests
 
 ```bash
-PYTHONPATH=src python -m pytest tests/ -q      # 539 tests
+PYTHONPATH=src python -m pytest tests/ -q      # 577 tests
 ```
 
 - `tests/unit/` — properties of each primitive and component (no reference libs).
@@ -198,16 +206,34 @@ PYTHONPATH=src python -m pytest tests/ -q      # 539 tests
 
 ## Results on the measured build
 
-Tuning the real bench plant
+**Balancing.** Tuning the real bench plant
 ([`configs/pendulum_measured.yaml`](configs/pendulum_measured.yaml)) finds an
 LQG that stabilises a 0.05 rad tilt in ~0.3 s at a ~7 V peak on the 12 V rail,
-in 28 simulated evaluations. The follow-up robustness study —
+in 28 simulated evaluations.
+
+**Robustness, and closing the loop on it.** The follow-up study —
 [`docs/papers/robustness_lqg_measured.md`](docs/papers/robustness_lqg_measured.md)
-— reads the tuned loop's stability margins: **gain-robust (6.85 dB, +120 %
-gain tolerance) but delay-fragile (PM 11.6°, ≈ 57 ms)** — the textbook LQG
-caveat of Doyle (1978), and the motivation for folding a margin term into the
-tuning objective next. An empirical comparison of the three acquisition
-functions is in [`docs/guides/experiments.md`](docs/guides/experiments.md).
+— reads the tuned loop's stability margins and finds it **gain-robust
+(6.85 dB, +120 % gain tolerance) but delay-fragile (PM 11.6°, ≈ 57 ms of
+latency budget)**: the textbook LQG caveat of Doyle (1978). So the objective
+grew an optional **margin penalty** — an asymmetric hinge that fires when phase
+or gain margin falls below its floor. Re-running the tuner with it on, all else
+identical, **roughly doubles the delay budget (57 → 108 ms, PM 11.6° → 25.2°)**
+at a small cost in gain margin. A directional win, not a clean sweep — the
+honest A/B, including where it falls short of the 30° target, is §7 of that
+paper.
+
+**Swing-up.** [`scripts/swing_up.py`](scripts/swing_up.py) runs the whole
+maneuver on the nonlinear plant: energy-shaping swing-up from hanging, a
+switching supervisor, then the balancing LQG catching it. On the measured build
+it also does the honest thing — it reports the maneuver **infeasible** at the
+placeholder pivot friction (`b_p = 0.01` caps the energy pump below what the
+0.044 N·m peak reaction torque needs) and names the threshold. Below it, the
+pendulum pumps up over ~4 swings and the LQG catches it in 2.82 s to 0.00°.
+Theory: [`docs/theory/swingup.md`](docs/theory/swingup.md).
+
+An empirical comparison of the three acquisition functions is in
+[`docs/guides/experiments.md`](docs/guides/experiments.md).
 
 ---
 
@@ -223,7 +249,9 @@ functions is in [`docs/guides/experiments.md`](docs/guides/experiments.md).
 - C. E. Rasmussen, C. K. I. Williams, *Gaussian Processes for Machine
   Learning*, MIT Press, 2006 — the GP equations cited throughout the code.
 - J. C. Doyle, "Guaranteed Margins for LQG Regulators: None", *IEEE TAC*, 1978
-  — why the robustness analysis exists.
+  — why the robustness analysis, and then the margin penalty, exist.
+- K. J. Åström, K. Furuta, "Swinging up a pendulum by energy control",
+  *Automatica* 36(2), 2000 — the energy-shaping law behind `swing_up.py`.
 
 See [`docs/papers/README.md`](docs/papers/README.md) for how each reference
 maps onto the code.
