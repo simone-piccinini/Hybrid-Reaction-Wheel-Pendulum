@@ -1,80 +1,151 @@
-# Implementation Brief — LQR Controller via the Discrete Riccati Equation
+# Implementation Brief — Kalman Filter (the LQG State Estimator)
 
 ## Goal
 
-Compute the constant feedback gain $K$ that stabilises the pendulum at the upright equilibrium while balancing two competing costs: how far the state strays from zero, and how much control effort is spent. The control law is a single matrix multiply, $u = -K\hat{\mathbf{x}}$, applied to the state estimate from the Kalman filter.
+Recover the full state $\hat{\mathbf{x}}$ of the pendulum from a handful of
+noisy sensors, so the LQR law can feed back on an *estimate* it does not measure
+directly. The controller wants $[\theta_p, \dot\theta_p, \theta_w, \dot\theta_w]$
+but the hardware senses only a subset (an angle and a wheel rate). The Kalman
+filter fills the gap: it is the optimal linear estimator that fuses the plant
+*model* with each incoming *measurement*, weighting the two by their relative
+uncertainty. Its output $\hat{\mathbf{x}}$ is exactly what `LQRController`
+consumes in $u = -K\hat{\mathbf{x}}$ — the two halves of **LQG**.
 
 ## Where it comes from (the one-paragraph intuition)
 
-LQR minimises an infinite sum of quadratic costs over a linear system. Solving for all future controls at once is intractable, so dynamic programming solves it backward one step at a time via the "cost-to-go" value function. Because the dynamics are linear and the cost quadratic, that value function is itself quadratic — $V(\mathbf{x}) = \tfrac{1}{2}\mathbf{x}^\top P \mathbf{x}$ — and minimising it over the control falls out as a *linear* feedback law $u = -K\mathbf{x}$. The matrix $P$ is the unique fixed point of the **Riccati equation**, and the gain is read directly off it. For a time-invariant plant the backward recursion converges to a steady state, so $P$ and $K$ are computed once and held constant.
+At every step we hold a Gaussian belief about the state: a mean $\hat{\mathbf{x}}$
+and a covariance $P$ that measures how unsure we are. Two things happen each
+cycle. First we **predict**: push the belief forward through the known dynamics
+$(A_d, B_d)$, which moves the mean and — because the model is imperfect and the
+world is noisy — *inflates* the covariance by the process noise $W$. Then we
+**update**: a measurement $\mathbf{z}$ arrives, we compare it to what the model
+expected ($C\hat{\mathbf{x}}^-$), and we nudge the mean toward the data by an
+amount set by the **Kalman gain** $L$ — large when the sensors are trusted
+(small $V$), small when they are noisy. The update *shrinks* the covariance,
+because a measurement always buys information. Predict inflates, update deflates;
+the gain is the optimal balance point between the two, and for a time-invariant
+plant the covariance settles to a steady state so the gain can be precomputed.
 
 ## What it consumes
 
-- $(A_d, B_d)$ — the **discretised** plant matrices from the dynamics layer (the brief runs in discrete time; do not pass continuous $A, B$).
-- $Q \succeq 0$ — state cost weight. Penalises deviation of each state from zero; larger entries demand tighter regulation of that state.
-- $R \succ 0$ — control cost weight. Penalises voltage; larger $R$ produces gentler, more energy-efficient control.
+- $(A_d, B_d, C)$ — the **discretised** linear plant from the dynamics layer.
+  The recursion runs in discrete time: pass `model.discretize(dt)`, never the
+  continuous $(A, B)$. $C$ is the measurement matrix, $\mathbf{y} = C\mathbf{x} +
+  \mathbf{v}$, selecting what the hardware actually senses (see `model.md`).
+- $W \succeq 0$ — **process-noise** covariance (`W_process`, $n_x \times n_x$).
+  How much we distrust the model; larger $W$ makes the filter lean on the sensors.
+- $V \succ 0$ — **measurement-noise** covariance (`V_measure`, $n_y \times n_y$).
+  How much we distrust the sensors; larger $V$ makes the filter lean on the model.
 
-$Q$ and $R$ are **tuning parameters owned by the optimization layer** — not physical constants. The whole Bayesian-optimization loop exists to discover the $(Q, R)$ (alongside the filter's $W, V$) that make the real closed loop perform best. This brief treats them as inputs.
+$W$ and $V$ are **not** the LQR's $Q, R$ — see `notation.md` §1. Like $Q, R$ they
+are **tuning parameters owned by the optimisation layer**: the Bayesian-optimisation
+loop searches $(Q, R, W, V)$ jointly for the best real closed-loop performance.
+This brief treats them as inputs.
 
 ## The equations to implement
 
-**Discrete Algebraic Riccati Equation (DARE)** — solve for the symmetric positive-definite fixed point $P$:
+Write $\hat{\mathbf{x}}^-, P^-$ for the *a-priori* (predicted) estimate and
+covariance, $\hat{\mathbf{x}}, P$ for the *a-posteriori* (corrected) ones.
+
+**Predict (time update)** — propagate the belief through the dynamics:
 
 $$
-
-P = Q + A_d^\top P A_d - A_d^\top P B_d\left(R + B_d^\top P B_d\right)^{-1} B_d^\top P A_d.
-
+\hat{\mathbf{x}}^- = A_d\,\hat{\mathbf{x}} + B_d\,u, \qquad
+P^- = A_d\,P\,A_d^\top + W.
 $$
 
-**Gain** — read off the converged $P$:
+**Update (measurement update)** — fold in the measurement $\mathbf{z}$:
 
 $$
-
-K = \left(R + B_d^\top P B_d\right)^{-1} B_d^\top P A_d.
-
+S = C\,P^-\,C^\top + V, \qquad
+L = P^-\,C^\top S^{-1},
+$$
+$$
+\hat{\mathbf{x}} = \hat{\mathbf{x}}^- + L\,\big(\mathbf{z} - C\,\hat{\mathbf{x}}^-\big), \qquad
+P = (I - L C)\,P^-\,(I - L C)^\top + L\,V\,L^\top.
 $$
 
-**Control law** — applied every step to the estimate:
+$S$ is the **innovation covariance**, $\mathbf{z} - C\hat{\mathbf{x}}^-$ the
+**innovation** (measurement minus prediction), and $L$ the **Kalman gain**
+(`L_gain`, $n_x \times n_y$). The covariance update is written in **Joseph form**
+— $(I - LC)P^-(I - LC)^\top + LVL^\top$ rather than the algebraically equal but
+fragile $(I - LC)P^-$ — because it stays symmetric and positive-semidefinite
+under round-off (`numerical_standards.md` §4). One full cycle is `predict(u)`
+then `update(z)`.
+
+References: Anderson & Moore, *Optimal Filtering*, §3.1; Welch & Bishop, *An
+Introduction to the Kalman Filter*, eqs. 1.9–1.13.
+
+## Duality note (reuse the Riccati solver)
+
+For a time-invariant plant the a-priori covariance $P^-$ converges to a fixed
+point that solves a **discrete algebraic Riccati equation** — the *same* equation
+the LQR solves, under the substitution $A_d \to A_d^\top$, $B_d \to C^\top$,
+$Q \to W$, $R \to V$:
 
 $$
-
-u = -K\,\hat{\mathbf{x}}.
-
+P^- = W + A_d\,P^-\,A_d^\top - A_d\,P^-\,C^\top\big(C\,P^-\,C^\top + V\big)^{-1} C\,P^-\,A_d^\top .
 $$
 
-## How to solve the DARE — backward sweep to steady state
+So the steady-state filter calls the **one** DARE routine from `numerics/riccati.py`
+as `solve_dare(A_dᵀ, Cᵀ, W, V)`, reads the converged $P^-$, and forms the
+steady-state gain $L = P^- C^\top (C P^- C^\top + V)^{-1}$ from it. Do **not**
+write a second solver, and do not confuse the covariances: the control Riccati
+solution is `P_dare` / `P_care`; the estimator's is `P_est` (recursive) or
+`P_pred` (steady-state a-priori). The gain the DARE returns for the dual problem
+is *not* itself the Kalman gain — recompute $L$ from $P^-$ as above.
 
-The fixed point is found by iterating the recursion until it stops moving:
+## The detectability caveat for this plant
 
-1. **Initialise** $P \leftarrow Q$ (any PSD seed works; $Q$ is standard).
-2. **Iterate** the Riccati update:
-   $$
+The steady-state filter exists only for a **detectable** pair $(A_d, C)$ — every
+unstable/marginal mode must be visible in some measurement. This plant's locked
+sensor set $[\theta_p, \dot\theta_w]$ **does not see the wheel angle** $\theta_w$:
+column 3 of $A$ is zero (the angle drives nothing) and no sensor reads it, so it
+is an *unobservable integrator* sitting on the unit circle. Consequently **no
+steady-state Kalman filter exists for the full 4-state plant** — `solve_dare` on
+the dual would not converge to a stabilising solution.
 
-   P_{\text{next}} = Q + A_d^\top P A_d - A_d^\top P B_d\left(R + B_d^\top P B_d\right)^{-1} B_d^\top P A_d.
+This is a property of the physics, not a bug. Two consequences, both intended:
 
-   $$
-3. **Check convergence:** stop when $\lVert P_{\text{next}} - P \rVert_\infty < \texttt{ATOL} + \texttt{RTOL}\cdot\lVert P \rVert_\infty$ (tolerances from the numerical-standards config). Otherwise set $P \leftarrow P_{\text{next}}$ and repeat.
-4. **Cap iterations** at the configured maximum; if it has not converged, raise `RiccatiNotConverged` rather than returning a half-baked $P$.
-5. **Compute $K$** once from the converged $P$.
-
-This is the Kleinman-style value-iteration route. It lives in the numerics layer and is written from scratch — no library DARE solver.
-
-## Duality note (reuse the same solver)
-
-The Kalman filter's steady-state covariance solves the **same equation** with substitutions $A_d \to A_d^\top$, $B_d \to C^\top$, $Q \to W$, $R \to V$. Implement one Riccati routine and call it twice — once for the LQR gain, once for the estimator gain. Do not write two solvers.
+- The **recursive** filter (`predict`/`update`) stays perfectly well-defined; only
+  the *estimate-error covariance entry* $P_{\text{est}}[2,2]$ (the wheel angle)
+  grows without bound over an infinite horizon. Over the finite simulation
+  horizon it is harmless.
+- Analyses that *need* a steady-state observer (e.g. the loop-gain / stability
+  margins) drop $\theta_w$ and work on the controllable-and-observable reduced
+  model $[\theta_p, \dot\theta_p, \dot\theta_w]$ (`KEEP = [0,1,3]`), on which the
+  dual DARE is well-posed. The hidden mode cancels in the loop gain, so margins
+  are unaffected (see `docs/papers/robustness_lqg_measured.md`).
 
 ## Implementation order
 
-1. **Receive** $(A_d, B_d)$ from dynamics and $(Q, R)$ from config / optimizer.
-2. **Validate:** $Q$ symmetric PSD, $R$ symmetric positive-definite; check $(A_d, B_d)$ is controllable (otherwise no stabilising gain exists).
-3. **Solve the DARE** by the backward sweep above to obtain the steady-state $P$.
-4. **Compute** $K$ from $P$.
-5. **Hand off** the constant $K$ to the control law, which is invoked each timestep as $u = -K\hat{\mathbf{x}}$.
+1. **Receive** the discrete $(A_d, B_d, C)$ from dynamics and $(W, V)$ from
+   config / optimiser. Validate: $W$ symmetric PSD, $V$ symmetric PD, shapes
+   $n_x \times n_x$ and $n_y \times n_y$.
+2. **Initialise** $\hat{\mathbf{x}}_0$ (default zeros — the upright equilibrium)
+   and $P_0$ (default $W$, the one-step prior uncertainty).
+3. **Predict** with the applied $u$: propagate $\hat{\mathbf{x}}^-, P^-$.
+4. **Update** with the measurement $\mathbf{z}$: form $S$, solve for $L$, correct
+   the mean, apply the Joseph-form covariance update.
+5. **Hand off** $\hat{\mathbf{x}}$ to the LQR law each step. For a fixed design,
+   optionally precompute the steady-state $L$ via the dual DARE (§ "Duality note")
+   instead of recursing $P$.
 
 ## Practical cautions
 
-- **Never invert directly.** The term $(R + B_d^\top P B_d)^{-1}$ is applied by solving an SPD linear system with the project's factorisation primitive, not by forming an explicit inverse.
-- **Keep $P$ symmetric.** Round-off drifts $P$ off symmetry; re-symmetrise (`P ← ½(P + Pᵀ)`) each iteration to keep the inner inverse well-conditioned.
-- **Confirm the closed loop is stable.** After computing $K$, the eigenvalues of $A_d - B_d K$ must all lie inside the unit circle. If any sits on or outside it, the gain does not stabilise — treat as a configuration error (and, in the optimizer, map to a large finite penalty rather than crashing).
-- **The gain feeds back on the estimate, not the true state.** LQR consumes $\hat{\mathbf{x}}$ from the Kalman filter; this separation (LQR + Kalman = LQG) is what makes output-feedback control optimal.
-- **Continuous vs discrete.** This brief is the discrete DARE. If the controller were left in continuous time it would instead be the continuous (CARE) form $0 = Q + A^\top P + P A - P B R^{-1} B^\top P$ — keep the two distinct and use the one matching your discretisation choice.
+- **Never invert directly.** $L = P^- C^\top S^{-1}$ is applied by solving the SPD
+  system $S\,L^\top = C\,P^-$ with the project's Cholesky solve (`chol_solve`),
+  not by forming $S^{-1}$ (`AGENTS.md` §3).
+- **Keep $P$ symmetric.** Re-symmetrise ($P \leftarrow \tfrac12(P + P^\top)$) after
+  each update; round-off drifts $P$ off symmetry and corrupts the next $S$. Use
+  the Joseph form, not $(I - LC)P^-$.
+- **Discrete only.** The recursion runs on $(A_d, B_d, C)$; passing the continuous
+  model is a configuration error the constructor rejects.
+- **The gain feeds the controller, not the truth.** The LQR consumes $\hat{\mathbf{x}}$,
+  never the true state — this separation (LQR + Kalman = LQG) is what makes
+  output-feedback control optimal. But note **Doyle (1978)**: the LQR and the
+  filter are each robust, yet their combination guarantees *no* stability margin
+  — the reason `scripts/stability_margins.py` and the robustness study exist.
+- **Determinism.** The estimate trajectory is a pure function of
+  $(\mathbf{x}_0, P_0, u\text{-sequence}, z\text{-sequence})$; all randomness lives
+  upstream in the seeded simulator, never inside the filter.

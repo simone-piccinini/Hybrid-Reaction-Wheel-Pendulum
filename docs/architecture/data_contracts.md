@@ -58,8 +58,20 @@ Produced by `SimulationEngine.run`; consumed by `ObjectiveFunction` and `metrics
 | `seed` | int | — | RNG seed that produced this run |
 | `diverged` | bool | — | `True` if the pendulum fell / state blew up |
 | `config` | `LQGConfig` | — | the configuration that produced this run |
+| `phase_margin_deg` | float | — | phase margin of the LQG loop (deg); `nan` if not computed |
+| `gain_margin_db` | float | — | gain margin of the LQG loop (dB); `nan` if not computed, `inf` if fully gain-robust |
 
 **Contract:** if `diverged is True`, the `ObjectiveFunction` assigns a large finite penalty cost (never `inf`/`nan`, which would poison the GP). Divergence detection threshold lives in `numerical_standards.md`.
+
+**Margins.** `phase_margin_deg`/`gain_margin_db` are a property of the *design*
+(the reduced steady-state LQG loop gain — the wheel angle is dropped, see
+`theory/kalman.md`), not of the seeded rollout, so they are identical across
+repeated rollouts of one config. They default to `nan` ("not computed" / the
+reduced design failed), so any `SimulationResult` built without them is valid.
+The `ObjectiveFunction` may add a hinge penalty when a *finite* margin falls
+below its threshold; non-finite margins contribute nothing (an infinite gain
+margin means fully gain-robust). These fields keep a run's robustness
+reproducible from its record.
 
 ---
 

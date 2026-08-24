@@ -15,7 +15,8 @@ def make_result():
     """
 
     def factory(theta=None, *, states=None, controls=None, time=None,
-                dt=0.01, diverged=False):
+                dt=0.01, diverged=False,
+                phase_margin_deg=float("nan"), gain_margin_db=float("nan")):
         if states is None:
             theta_arr = np.asarray(theta, dtype=np.float64)
             horizon = theta_arr.shape[0]
@@ -36,6 +37,7 @@ def make_result():
             time=time, true_states=states, estimated_states=states,
             controls=controls, measurements=np.zeros((horizon, 2)),
             seed=0, diverged=diverged, config=config,
+            phase_margin_deg=phase_margin_deg, gain_margin_db=gain_margin_db,
         )
 
     return factory

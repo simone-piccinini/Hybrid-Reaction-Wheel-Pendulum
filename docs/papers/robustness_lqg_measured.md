@@ -149,14 +149,61 @@ this build:
    3.6 rad/s.
 2. **Gain drift is not the worry.** With +120 % gain tolerance, battery droop and
    `K_t` variation are well covered — no need to over-engineer the supply.
-3. **Tune *for* phase margin.** The objective currently has no robustness term, so
-   the optimiser is free to return an 11.6° controller. Folding a hinge penalty
-   for `PM < 30°` (and `GM < 6 dB`) into the cost would steer the search toward
-   controllers that keep phase headroom — the natural next experiment.
+3. **Tune *for* phase margin.** The objective originally had no robustness term, so
+   the optimiser was free to return an 11.6° controller. A hinge penalty for
+   `PM < 30°` (and `GM < 6 dB`), computed on this same loop gain, folds that
+   concern into the cost so the search keeps phase headroom. That term is now
+   implemented and run — see §7.
 
 ---
 
-## 7. Reproduce
+## 7. Closing the loop — tuning *with* the margin penalty
+
+Point 3 of §6 is now implemented: the tuning objective carries an optional
+asymmetric hinge on the loop's phase and gain margins — penalising a margin
+*below* its floor — computed on the **same reduced steady-state LQG loop** this
+report reads (`optimization/objective.py`; the design lives in
+`docs/implementation_notes/margin_penalty_design.md`). To measure its effect
+cleanly, the Entropy-Search tuner was run on the measured build twice with the
+term **on** (`PM_min = 30°`, `GM_min = 6 dB`, `w_phase_margin = 50`,
+`w_gain_margin = 20`) and **off**, everything else **identical** — same seed,
+same 11-D search box, same 28-evaluation budget — so the *only* difference is the
+robustness term. The margins of what each run **reports** (the posterior-mean
+minimiser it hands back):
+
+| Reported optimum | Phase margin | **Delay budget** | Gain margin | Gain tolerance |
+|---|---|---|---|---|
+| **Penalty off** | 11.6° @ 3.56 rad/s | 57 ms (5.7 cyc @ 10 ms) | 6.85 dB @ 14.6 | +120 % |
+| **Penalty on** | **25.2° @ 4.06 rad/s** | **108 ms (10.8 cyc)** | 5.49 dB @ 7.41 | +88 % |
+
+Two readings. First, the **penalty-off run reproduces this report's controller
+exactly** (11.6°, 6.85 dB, 57 ms) — the setup is faithful, and the fragility §4
+diagnosed reappears. Second, the penalty **roughly doubles the phase margin and
+the delay budget** (57 → 108 ms): the firmware-latency headroom §4 named as the
+binding risk. The tuner genuinely trades toward the quantity it was told to
+protect — from ~5.7 to ~10.8 control cycles of tolerable extra lag.
+
+It is a **directional win, not a clean sweep**, and the honesty matters:
+
+- PM reached **25.2°, short of the 30° target** — the search moved hard toward
+  headroom but did not clear the bar in 28 evaluations.
+- **Gain margin slipped** 6.85 → 5.49 dB (just under the 6 dB bar): PM and GM
+  trade off, and this run weighted PM (50) over GM (20). The GM weight should
+  come up.
+- The *reported* optima have poor transients in **both** runs (`M_p` 37–43 %,
+  `T_s` 6–8 s). That is a small-budget artifact of returning the posterior-*mean*
+  minimiser in 11-D — the best *observed* costs are far lower — not an effect of
+  the penalty (the off-run is just as sluggish).
+
+The lesson extends §5's: margins are a property of the specific weights, and the
+tuner can now be *told* to care about them. Landing a controller that is
+simultaneously robust (PM ≥ 30°, GM ≥ 6 dB) *and* sharp is a calibration exercise
+from here — raise `w_gain_margin`, widen the budget, and average seeds (or use the
+two-stage explore-then-refine script).
+
+---
+
+## 8. Reproduce
 
 ```bash
 # tuned-controller margins (this report's numbers):
@@ -166,6 +213,10 @@ PYTHONPATH=src python scripts/stability_margins.py configs/pendulum_measured.yam
 
 # the experiment that produced the controller:
 PYTHONPATH=src python scripts/run_experiment.py configs/pendulum_measured.yaml -o results/measured
+
+# the §7 A/B: configs/pendulum_measured.yaml has the robustness term ON; run it,
+# then rerun a copy with w_phase_margin/w_gain_margin set to 0 for the OFF arm.
+PYTHONPATH=src python scripts/run_experiment.py configs/pendulum_measured.yaml -o results/measured_margin
 ```
 
 > On Windows, prefix with `PYTHONIOENCODING=utf-8` — `stability_margins.py`
@@ -173,9 +224,12 @@ PYTHONPATH=src python scripts/run_experiment.py configs/pendulum_measured.yaml -
 
 ---
 
-## 8. Bottom line
+## 9. Bottom line
 
 The tuned LQG **stabilises the measured pendulum with strong gain robustness
 (6.85 dB, +120 %) but thin phase robustness (11.6°, ~57 ms of delay)**. It is
-safe to bring up on hardware *provided the control loop's latency is kept tight*;
-the next design iteration should add a phase-margin term to the tuning objective.
+safe to bring up on hardware *provided the control loop's latency is kept tight*.
+The phase-margin term §6 called for is now in the objective (§7) and **roughly
+doubles the delay budget the tuner delivers** (57 → 108 ms); calibrating its
+weights to clear 30° / 6 dB while keeping the transient sharp is the remaining
+tuning work.

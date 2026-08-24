@@ -49,10 +49,12 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..control.lqr_controller import LQRController, UnstableClosedLoopError
-from ..core.types import LQGConfig, SimulationResult
+from ..core.types import LQGConfig, SimulationResult, StateSpaceModel
+from ..dynamics.frequency_response import loop_margins
 from ..dynamics.linearized_model import LinearizedPlantModel
 from ..dynamics.nonlinear_model import NonlinearPlantModel
-from ..estimation.kalman_filter import KalmanFilter
+from ..estimation.kalman_filter import KalmanFilter, steady_state_kalman_gain
+from ..numerics.linalg import NotPositiveDefiniteError, SingularMatrixError
 from ..numerics.riccati import RiccatiNotConverged
 from ..physical.pendulum import ReactionWheelPendulum
 from .disturbances import Disturbances
@@ -60,6 +62,58 @@ from .disturbances import Disturbances
 # The linearisation (and hence the whole LQG design) is a small-angle model:
 # past upright ± π/2 the pendulum has fallen and the rollout is over.
 DEFAULT_DIVERGENCE_ANGLE: float = math.pi / 2.0
+
+# The state is [theta_p, theta_p_dot, theta_w, theta_w_dot]; the wheel *angle*
+# (index 2) is a decoupled integrator — uncontrollable from the motor and
+# unobservable from the sensors — so a steady-state Kalman filter, and hence the
+# LQG loop gain whose margins we read, is defined only on the reduced
+# controllable+observable model. Dropping it matches kalman.md's detectability
+# caveat and scripts/stability_margins.py.
+_MARGIN_KEEP: tuple[int, ...] = (0, 1, 3)
+
+
+def _loop_stability_margins(
+    linear: LinearizedPlantModel, config: LQGConfig, dt: float
+) -> tuple[float, float]:
+    """``(phase_margin_deg, gain_margin_db)`` of the reduced steady-state LQG loop.
+
+    A margin is a property of the *design*, not the seeded rollout. Reduce to the
+    controllable+observable ``[theta_p, theta_p_dot, theta_w_dot]`` model, design
+    the reduced steady-state LQG from this config's ``(Q, R, W, V)`` (restricting
+    ``Q``/``W`` to the kept states, ``R``/``V`` unchanged), and read the loop-gain
+    margins (``frequency_response.loop_margins``). The dropped wheel-angle mode
+    cancels in the loop gain, so these margins faithfully describe the full
+    recursive design (``docs/papers/robustness_lqg_measured.md`` §3).
+
+    Any design or frequency-response failure — or a plant that is not the
+    standard 4-state layout — yields ``(nan, nan)``: margins are auxiliary
+    diagnostics and must never turn a runnable rollout into a failed one.
+    """
+    if linear.n_x != 4:
+        return float("nan"), float("nan")
+    keep = list(_MARGIN_KEEP)
+    cont = linear.continuous
+    try:
+        reduced = StateSpaceModel(
+            cont.A[np.ix_(keep, keep)],
+            cont.B[keep],
+            cont.C[:, keep],
+            np.zeros((cont.n_y, cont.n_u)),
+        ).discretize(dt)
+        Q_red = config.Q_lqr[np.ix_(keep, keep)]
+        W_red = config.W_process[np.ix_(keep, keep)]
+        K = LQRController.from_model(reduced, Q_red, config.R_lqr).K_gain
+        L = steady_state_kalman_gain(reduced, W_red, config.V_measure).L_gain
+        margins = loop_margins(reduced, K, L)
+    except (
+        UnstableClosedLoopError,
+        RiccatiNotConverged,
+        NotPositiveDefiniteError,
+        SingularMatrixError,
+        ValueError,
+    ):
+        return float("nan"), float("nan")
+    return margins.phase_margin_deg, margins.gain_margin_db
 
 
 @dataclass(frozen=True)
@@ -188,6 +242,13 @@ class SimulationEngine:
         except (UnstableClosedLoopError, RiccatiNotConverged):
             return self._diverged_result(config, used_seed)
 
+        # margins of the (reduced steady-state) LQG loop this design realises —
+        # a deterministic property of the design, recorded for the objective's
+        # robustness penalty and the run record (kalman.md detectability caveat).
+        phase_margin_deg, gain_margin_db = _loop_stability_margins(
+            linear, config, self.dt
+        )
+
         horizon = self.horizon
         time = self.dt * np.arange(horizon)
         true_states = np.zeros((horizon, linear.n_x))
@@ -226,6 +287,8 @@ class SimulationEngine:
             seed=used_seed,
             diverged=diverged,
             config=config,
+            phase_margin_deg=phase_margin_deg,
+            gain_margin_db=gain_margin_db,
         )
 
     def _diverged_result(self, config: LQGConfig, used_seed: int) -> SimulationResult:

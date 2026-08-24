@@ -215,3 +215,64 @@ def test_engine_is_frozen():
     with pytest.raises(dataclasses.FrozenInstanceError):
         engine.seed = 1
     assert not engine.initial_state.flags.writeable
+
+
+# --------------------------------------------------------------------------- #
+# stability margins of the design are recorded on the result
+# --------------------------------------------------------------------------- #
+def test_run_records_finite_loop_margins():
+    result = make_engine().run(make_config())
+    assert not result.diverged
+    assert np.isfinite(result.phase_margin_deg)
+    assert result.phase_margin_deg > 0.0
+    # a stable design has a real gain margin (finite) or an infinite one (robust)
+    assert result.gain_margin_db > 0.0
+
+
+def test_margins_are_seed_independent():
+    # margins are a property of the design, not the seeded rollout
+    engine = make_engine()
+    config = make_config()
+    a = engine.run(config, seed=1)
+    b = engine.run(config, seed=2)
+    assert not (a.diverged or b.diverged)
+    assert a.phase_margin_deg == pytest.approx(b.phase_margin_deg)
+    assert a.gain_margin_db == pytest.approx(b.gain_margin_db)
+
+
+def test_margins_match_the_direct_frequency_computation():
+    # the recorded margins equal what loop_margins gives for the same design
+    from inverted_pendulum.core.types import StateSpaceModel
+    from inverted_pendulum.dynamics.frequency_response import loop_margins
+    from inverted_pendulum.estimation.kalman_filter import steady_state_kalman_gain
+
+    engine = make_engine()
+    config = make_config()
+    result = engine.run(config)
+
+    cont = engine.linear_model.continuous
+    keep = [0, 1, 3]
+    reduced = StateSpaceModel(
+        cont.A[np.ix_(keep, keep)], cont.B[keep], cont.C[:, keep],
+        np.zeros((cont.n_y, cont.n_u)),
+    ).discretize(DT)
+    K = LQRController.from_model(
+        reduced, config.Q_lqr[np.ix_(keep, keep)], config.R_lqr
+    ).K_gain
+    L = steady_state_kalman_gain(
+        reduced, config.W_process[np.ix_(keep, keep)], config.V_measure
+    ).L_gain
+    expected = loop_margins(reduced, K, L)
+    assert result.phase_margin_deg == pytest.approx(expected.phase_margin_deg)
+    assert result.gain_margin_db == pytest.approx(expected.gain_margin_db)
+
+
+def test_diverged_design_result_has_nan_margins():
+    # an unstabilisable config short-circuits to a diverged result (no margins)
+    engine = make_engine()
+    # a huge R makes the DARE sweep fail to produce a stabilising gain here
+    bad = make_config(R_lqr=np.array([[1e30]]))
+    result = engine.run(bad)
+    if result.diverged:
+        assert math.isnan(result.phase_margin_deg)
+        assert math.isnan(result.gain_margin_db)

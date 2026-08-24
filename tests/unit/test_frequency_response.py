@@ -3,13 +3,18 @@
 import numpy as np
 import pytest
 
+from inverted_pendulum.control.lqr_controller import LQRController
 from inverted_pendulum.core.types import StateSpaceModel
 from inverted_pendulum.dynamics.frequency_response import (
     BodeData,
     bode,
     log_frequencies,
+    loop_margins,
+    loop_transfer_function,
+    stability_margins,
     transfer_function,
 )
+from inverted_pendulum.estimation.kalman_filter import steady_state_kalman_gain
 from inverted_pendulum.numerics.linalg import SingularMatrixError
 from inverted_pendulum.physical.motor import DCMotor
 from inverted_pendulum.physical.pendulum import ReactionWheelPendulum
@@ -19,6 +24,23 @@ from inverted_pendulum.physical.wheel import ReactionWheel
 def first_order(a=2.0, b=3.0, c=1.0, d=0.0):
     """Continuous SISO ``ẋ = −a x + b u, y = c x + d u``  ->  G(s) = c·b/(s+a) + d."""
     return StateSpaceModel([[-a]], [[b]], [[c]], [[d]])
+
+
+def reduced_lqg(dt=0.01):
+    """A stable reduced [theta_p, theta_p_dot, theta_w_dot] LQG design (drop wheel angle)."""
+    cont = pendulum_model()
+    keep = [0, 1, 3]
+    reduced = StateSpaceModel(
+        cont.A[np.ix_(keep, keep)], cont.B[keep], cont.C[:, keep],
+        np.zeros((cont.n_y, cont.n_u)),
+    ).discretize(dt)
+    K = LQRController.from_model(
+        reduced, np.diag([50.0, 5.0, 0.05]), np.array([[1.0]])
+    ).K_gain
+    L = steady_state_kalman_gain(
+        reduced, np.diag([1e-4, 1e-3, 1e-2]), np.diag([1e-6, 1e-4])
+    ).L_gain
+    return reduced, K, L
 
 
 def pendulum_model():
@@ -169,3 +191,30 @@ def test_log_frequencies_guards():
         log_frequencies(10.0, 1.0)
     with pytest.raises(ValueError):
         log_frequencies(1e-2, 1e2, 1)
+
+
+# --------------------------------------------------------------------------- #
+# loop_margins — the one-call convenience over the sweep + extraction
+# --------------------------------------------------------------------------- #
+def test_loop_margins_matches_the_manual_sequence():
+    reduced, K, L = reduced_lqg(dt=0.01)
+    got = loop_margins(reduced, K, L)
+    # the exact sequence the helper wraps (and the script runs)
+    omega = log_frequencies(1e-2, 0.9 * np.pi / reduced.dt, 2000)
+    loop = loop_transfer_function(reduced, K, L, omega)
+    expected = stability_margins(omega, loop)
+    assert got.phase_margin_deg == pytest.approx(expected.phase_margin_deg)
+    assert got.gain_margin_db == pytest.approx(expected.gain_margin_db)
+    assert got.gain_crossover == pytest.approx(expected.gain_crossover, nan_ok=True)
+
+
+def test_loop_margins_are_finite_for_a_stable_design():
+    reduced, K, L = reduced_lqg(dt=0.01)
+    m = loop_margins(reduced, K, L)
+    assert np.isfinite(m.phase_margin_deg) and m.phase_margin_deg > 0.0
+
+
+def test_loop_margins_rejects_continuous_model():
+    cont = pendulum_model()  # continuous
+    with pytest.raises(ValueError):
+        loop_margins(cont, np.zeros((1, 4)), np.zeros((4, 2)))

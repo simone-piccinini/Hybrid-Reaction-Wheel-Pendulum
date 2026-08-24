@@ -104,6 +104,78 @@ def test_no_saturation_term_when_U_max_is_none(make_result):
 
 
 # --------------------------------------------------------------------------- #
+# robustness (stability-margin) penalty — the reversed hinge
+# --------------------------------------------------------------------------- #
+def only_margins(**overrides):
+    """Objective with only the robustness term active (performance weights 0)."""
+    base = dict(w_error=0.0, w_control=0.0, w_overshoot=0.0, w_settling=0.0)
+    base.update(overrides)
+    return make(**base)
+
+
+def test_no_margin_penalty_by_default(make_result):
+    # weights default to 0 -> a fragile margin costs nothing, cost unchanged
+    r = make_result(np.zeros(3), phase_margin_deg=1.0, gain_margin_db=0.1)
+    assert make().w_phase_margin == 0.0 and make().w_gain_margin == 0.0
+    assert make().evaluate(r) == pytest.approx(0.0)
+
+
+def test_phase_margin_shortfall_is_penalised(make_result):
+    # PM = 12° below PM_min = 30°: hinge w·((30-12)/30)²
+    r = make_result(np.zeros(3), phase_margin_deg=12.0)
+    obj = only_margins(PM_min=30.0, w_phase_margin=50.0)
+    assert obj.evaluate(r) == pytest.approx(50.0 * ((30.0 - 12.0) / 30.0) ** 2)
+
+
+def test_gain_margin_shortfall_is_penalised(make_result):
+    # GM = 2 dB below GM_min = 6 dB: hinge w·((6-2)/6)²
+    r = make_result(np.zeros(3), gain_margin_db=2.0)
+    obj = only_margins(GM_min=6.0, w_gain_margin=20.0)
+    assert obj.evaluate(r) == pytest.approx(20.0 * ((6.0 - 2.0) / 6.0) ** 2)
+
+
+def test_margin_at_or_above_threshold_is_free(make_result):
+    # PM/GM meeting the bar pay nothing (the controller may be MORE robust)
+    r = make_result(np.zeros(3), phase_margin_deg=45.0, gain_margin_db=8.0)
+    obj = only_margins(PM_min=30.0, GM_min=6.0,
+                       w_phase_margin=50.0, w_gain_margin=20.0)
+    assert obj.evaluate(r) == pytest.approx(0.0)
+
+
+def test_thinner_margin_costs_more(make_result):
+    obj = only_margins(PM_min=30.0, w_phase_margin=10.0)
+    thin = make_result(np.zeros(3), phase_margin_deg=5.0)
+    healthy = make_result(np.zeros(3), phase_margin_deg=25.0)
+    assert obj.evaluate(thin) > obj.evaluate(healthy) > 0.0
+
+
+def test_non_finite_margins_contribute_no_penalty(make_result):
+    # nan (not computed) and +inf (never hits -180°, fully gain-robust) -> 0
+    obj = only_margins(w_phase_margin=50.0, w_gain_margin=20.0)
+    nan_pm = make_result(np.zeros(3), phase_margin_deg=float("nan"),
+                         gain_margin_db=float("inf"))
+    assert obj.evaluate(nan_pm) == pytest.approx(0.0)
+    assert np.isfinite(obj.evaluate(nan_pm))
+
+
+def test_margin_penalty_adds_on_top_of_performance(make_result):
+    # the robustness term is additive with the rest of the cost
+    r = make_result([1.0, 0.5, 0.2, 0.05, 0.0], dt=0.01,
+                    phase_margin_deg=15.0)
+    base = make(Mp_desired=50.0, Ts_desired=10.0, w_error=1.0, w_control=0.0)
+    withpen = make(Mp_desired=50.0, Ts_desired=10.0, w_error=1.0, w_control=0.0,
+                   PM_min=30.0, w_phase_margin=8.0)
+    extra = 8.0 * ((30.0 - 15.0) / 30.0) ** 2
+    assert withpen.evaluate(r) == pytest.approx(base.evaluate(r) + extra)
+
+
+def test_diverged_run_ignores_margins(make_result):
+    # a diverged rollout short-circuits to the flat PENALTY, margins irrelevant
+    r = make_result([1.0, 2.0], diverged=True, phase_margin_deg=1.0)
+    assert only_margins(w_phase_margin=1e6).evaluate(r) == PENALTY
+
+
+# --------------------------------------------------------------------------- #
 # divergence and finiteness
 # --------------------------------------------------------------------------- #
 def test_diverged_run_gets_the_finite_penalty(make_result):
@@ -142,6 +214,10 @@ def test_metric_passthroughs(make_result):
         dict(U_max=0.0),
         dict(penalty=np.inf),
         dict(penalty=0.0),
+        dict(PM_min=0.0),
+        dict(GM_min=-1.0),
+        dict(w_phase_margin=-1.0),
+        dict(w_gain_margin=-2.0),
     ],
 )
 def test_validation_rejects_bad_params(bad):

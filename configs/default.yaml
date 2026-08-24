@@ -65,6 +65,14 @@ objective:
   w_settling: 100.0          # w_t — settling-time penalty weight (keep LARGE)
   U_max: 24.0                # actuation limit (V); peaks beyond it are penalised
   w_saturation: 10.0         # penalty weight on max|u| past U_max
+  # robustness term (OFF by default: weights 0). Hinge on the LQG loop margins,
+  # firing when a margin drops BELOW its threshold — steers the tuner away from
+  # the delay-fragile controllers LQG permits (Doyle 1978). See
+  # docs/papers/robustness_lqg_measured.md.
+  PM_min: 30.0               # min acceptable phase margin (deg); hinge knee + scale
+  GM_min: 6.0                # min acceptable gain margin (dB); hinge knee + scale
+  w_phase_margin: 0.0        # weight on PM shortfall below PM_min (0 = off)
+  w_gain_margin: 0.0         # weight on GM shortfall below GM_min (0 = off)
   # error_state_index: 0     # which state is e(t) for ITAE (default 0 = theta_p)
   # penalty: optional; omitted -> core PENALTY (1e3) for a diverged rollout
 

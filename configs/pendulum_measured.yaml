@@ -40,7 +40,13 @@ simulation:
     measurement_std: [1.0e-3, 1.0e-2]
 
 # ----------------------------------------------------------------------------
-# objective — default targets, with U_max matched to the 12 V rail
+# objective — default targets, with U_max matched to the 12 V rail, and the
+# robustness term ENABLED: the measured build tuned without it came out
+# delay-fragile (PM 11.6°, ~57 ms), the textbook Doyle-1978 LQG trap. The
+# phase/gain-margin hinges steer the search toward controllers that keep
+# headroom on real hardware (docs/papers/robustness_lqg_measured.md §6).
+# Weights are a starting point — calibrate on a two-stage run (see the design
+# note, docs/implementation_notes/margin_penalty_design.md §8).
 # ----------------------------------------------------------------------------
 objective:
   Mp_desired: 5.0
@@ -53,6 +59,10 @@ objective:
   w_settling: 100.0
   U_max: 12.0                # match the 12 V rail; penalise saturation
   w_saturation: 10.0
+  PM_min: 30.0               # want ≥ 30° phase margin (≈ delay headroom)
+  GM_min: 6.0                # want ≥ 6 dB gain margin
+  w_phase_margin: 50.0       # penalise PM below PM_min (the binding risk here)
+  w_gain_margin: 20.0        # penalise GM below GM_min
 
 # ----------------------------------------------------------------------------
 # search_space — 11-D log-space box over vec(Q, R, W, V) (default)
