@@ -31,9 +31,9 @@ with, term by term:
   is better — the reverse direction of the overshoot/settling hinges). This is
   the one term measured in the frequency domain, on the design's loop gain rather
   than the rollout trajectory; it steers the optimiser away from the delay-fragile
-  controllers LQG permits (Doyle 1978). Off by default (weights 0). See
-  ``docs/papers/robustness_lqg_measured.md`` and
-  ``docs/implementation_notes/margin_penalty_design.md``.
+  controllers LQG permits (Doyle 1978). Off by default (weights 0). Derivation,
+  measured A/B, and weight calibration: ``docs/papers/robustness_lqg_measured.md``
+  §7.
 
 A diverged rollout is mapped to the large **finite** ``PENALTY`` — never
 ``inf``/``nan``, which would poison the GP surrogate (``data_contracts.md`` §3;

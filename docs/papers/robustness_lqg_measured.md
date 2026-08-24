@@ -162,8 +162,8 @@ this build:
 Point 3 of §6 is now implemented: the tuning objective carries an optional
 asymmetric hinge on the loop's phase and gain margins — penalising a margin
 *below* its floor — computed on the **same reduced steady-state LQG loop** this
-report reads (`optimization/objective.py`; the design lives in
-`docs/implementation_notes/margin_penalty_design.md`). To measure its effect
+report reads (`optimization/objective.py`, threaded through the rollout by
+`simulation/simulator.py`). To measure its effect
 cleanly, the Entropy-Search tuner was run on the measured build twice with the
 term **on** (`PM_min = 30°`, `GM_min = 6 dB`, `w_phase_margin = 50`,
 `w_gain_margin = 20`) and **off**, everything else **identical** — same seed,

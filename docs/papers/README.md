@@ -48,14 +48,24 @@ The binding derivation is [`docs/theory/optimization.md`](../theory/optimization
   and [`marginal_likelihood.py`](../../src/inverted_pendulum/optimization/marginal_likelihood.py).
 - **J. C. Doyle — "Guaranteed Margins for LQG Regulators: None", IEEE TAC,
   1978.** LQR and the Kalman filter are each robust; their combination need
-  not be. The reason `scripts/stability_margins.py` exists, and the frame for
-  the robustness analysis below.
+  not be. The reason `scripts/stability_margins.py` exists, the frame for the
+  robustness analysis below, and ultimately the reason the tuning objective
+  grew a phase/gain-margin penalty
+  ([`optimization/objective.py`](../../src/inverted_pendulum/optimization/objective.py)).
+- **K. J. Åström, K. Furuta — "Swinging up a pendulum by energy control",
+  Automatica 36(2), 2000.** The energy-shaping swing-up law, adapted here to a
+  reaction wheel: pump the body's mechanical energy toward the upright level,
+  then hand off to the balancing LQG. Implemented in
+  [`control/swingup_controller.py`](../../src/inverted_pendulum/control/swingup_controller.py),
+  derived in [`docs/theory/swingup.md`](../theory/swingup.md).
 
 ## This repo's own analyses
 
 - [**Robustness of the Tuned LQG on the Measured Build**](robustness_lqg_measured.md)
   — stability margins of the Entropy-Search-tuned controller on the real
   plant: gain-robust (6.85 dB, +120 %) but delay-fragile (PM 11.6°, ≈ 57 ms),
-  and what that means for the firmware.
+  and what that means for the firmware. §7 adds the A/B of the margin penalty
+  the study motivated: with the term on, the delay budget roughly doubles
+  (57 → 108 ms) — a directional win, reported with its shortfalls.
 - [Acquisition-function comparison](../guides/experiments.md) — Entropy Search
   vs Expected Improvement vs UCB on the same tuning problem, multi-seed.

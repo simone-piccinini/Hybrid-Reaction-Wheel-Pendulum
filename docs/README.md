@@ -30,10 +30,11 @@ start with the **codebase overview**, then dip into theory or guides as needed.
 - [Experiments](guides/experiments.md) — an empirical comparison of the three
   acquisition functions, reproducible from `scripts/compare_acquisitions.py`.
 - [The Analysis Scripts](guides/analysis_scripts.md) — a tour of every entry
-  point in `scripts/`, with a deep dive on **`stability_margins.py`**: why the
-  open-loop LQG gain (phase/gain margin, Doyle's caveat) predicts how the
-  controller survives real-hardware latency and gain drift — the script that
-  tells you the truth a clean simulation hides.
+  point in `scripts/` (including `swing_up.py`), with a deep dive on
+  **`stability_margins.py`**: why the open-loop LQG gain (phase/gain margin,
+  Doyle's caveat) predicts how the controller survives real-hardware latency
+  and gain drift — the script that tells you the truth a clean simulation
+  hides, and that motivated the objective's margin penalty.
 
 ## Hardware
 
