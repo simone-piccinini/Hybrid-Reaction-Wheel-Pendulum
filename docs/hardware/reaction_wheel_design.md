@@ -194,10 +194,97 @@ plant:
 objective: {U_max: 12.0, ...}
 ```
 
-Run `scripts/run_experiment.py`: if the controller saturates `U_max` or the run
-diverges, the wheel has too little momentum (raise `I_w` / `ω_max`) or the arm is
-too long/heavy (see [sizing_the_pendulum.md](sizing_the_pendulum.md)). That
-paper → CAD → simulation loop is the whole design method.
+Run `scripts/run_experiment.py`: if the run diverges, or the controller
+saturates `U_max`, the design is short of authority somewhere. **Do not assume
+that means the wheel** — saturating `U_max` is a *torque* symptom, and on this
+build the wheel turned out never to be the binding constraint (§9). Check which
+limit actually binds before adding rim mass. That paper → CAD → simulation loop
+is the whole design method.
+
+---
+
+## 9. The as-built wheel (v2) — and why adding wire is the wrong fix
+
+The printed PLA wheel came out **lighter and less inertial** than §4's estimate:
+
+| | §4 estimate | **as built (Onshape)** |
+|---|---|---|
+| wheel mass | 57–77 g | **41.0 g** |
+| $I_w$ | $1.0\text{--}1.35\times10^{-4}$ | **$6.117\times10^{-5}$ kg·m²** (61.17 kg·mm²) |
+| $m_{tip}$ | ~120–137 g | **101 g** |
+| $I_b = m_{tip}L^2$ | ~3.0×10⁻³ | **2.27×10⁻³ kg·m²** |
+
+That is **64 %** of the §2 target $I_w \approx 1.1\times10^{-4}$, which by the
+momentum argument alone drops the catch angle from 12° to **7.6°**. The obvious
+fix is to add rim mass — galvanized wire around the Ø102 mm rim, where
+$\Delta I = m r^2$ is most efficient (~20 g of wire: 2.5 turns of 2 mm, or 10
+turns of 1 mm, closes the gap). **That fix does not work, and it is worth
+understanding why.**
+
+### The momentum requirement is not the binding constraint
+
+Two limits set the catch angle, and they pull in *opposite* directions as mass
+goes onto the rim:
+
+$$\underbrace{I_w\,\omega_{max} \ge 3\,I_b\,\omega_n\theta_c}_{\text{momentum — wire HELPS}}
+\qquad\qquad
+\underbrace{\tau \ge m_{tip}\,g\,L\sin\theta_c}_{\text{torque — wire HURTS}}$$
+
+Wire adds inertia (raising the momentum ceiling), but it also adds tip mass, so
+gravity's torque about the pivot grows and the *torque* ceiling falls. With the
+arm fixed at $L = 15$ cm and $\tau_{design} = 0.02$ N·m:
+
+| wire | $m_{tip}$ | $I_w$ (kg·mm²) | $\theta_c$ momentum | $\theta_c$ torque | usable |
+|---|---|---|---|---|---|
+| **0 g (as built)** | 101 g | 61.2 | 7.63° | 7.73° | **7.63°** |
+| +20 g | 121 g | 113.2 | 11.78° | 6.45° | 6.45° |
+| +42 g | 143 g | 170.4 | 15.01° | 5.45° | 5.45° |
+
+The two curves cross at **0.3 g of wire**. The as-built wheel is, by accident,
+almost exactly matched to the motor's design torque — 7.63° of momentum capacity
+against 7.73° of torque authority. **Past that point every gram of wire buys
+momentum the motor has no torque to spend, while making the pendulum harder to
+hold.** (If you are willing to spend the brief *stall* torque 0.044 N·m on the
+catch rather than the derated 0.02 N·m, the crossing moves out to ~29 g — the
+only regime in which wire helps at all.)
+
+### The simulator agrees
+
+Sweeping the largest recoverable initial tilt on the **nonlinear** plant, with
+one fixed balancing LQG and the 12 V rail enforced
+([`configs/pendulum_build_v2.yaml`](../../configs/pendulum_build_v2.yaml)):
+
+| rail | as built (41 g) | +20 g wire | +42 g wire |
+|---|---|---|---|
+| **12 V** | **10.5°** | 10.8° | 10.0° |
+| 18 V | 15.9° | 16.3° | 15.1° |
+| 24 V | 21.3° | 21.9° | 20.3° |
+| 36 V | 32.5° | 33.6° | 31.2° |
+
+Read the table both ways. **Across a row** (adding wire) nothing happens: +20 g
+buys **+0.3°**, and +42 g is *worse* than the bare wheel. **Down a column**
+(raising the rail) the catch angle scales almost linearly — tripling the rail
+triples it. The system is **voltage/torque limited, not momentum limited**,
+exactly as the crossing analysis predicts. In these rollouts the wheel peaks near
+185 rad/s while the *commanded* voltage clips hard against 12 V: the wheel still
+has momentum headroom when the motor has already run out of torque.
+
+### Verdict
+
+- **Do not add the wire.** It is the right fix for a momentum-limited design, and
+  this one is not momentum-limited. Save the 20 g — that mass costs you torque
+  headroom you cannot spare.
+- **The wheel as printed is fine**, and better than the §2 momentum estimate
+  suggests: the honest figure is a **~10.5° catch angle at 12 V**, not 7.6°
+  (§2's 3× safety factor is deliberately conservative).
+- **If you want a bigger catch angle, buy volts, not grams** — the rail is the
+  only lever in that table that moves. Failing that, shorten the arm (the $L$
+  that appears in *both* constraints), per
+  [sizing_the_pendulum.md](sizing_the_pendulum.md).
+
+Control verification of the as-built plant — tuning, stability margins, and the
+delay-fragility caveat — is in
+[`docs/papers/robustness_lqg_measured.md`](../papers/robustness_lqg_measured.md).
 
 ---
 
