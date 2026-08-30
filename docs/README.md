@@ -49,6 +49,11 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   reasoning and the math behind how long the arm can be for a given motor
   (torque vs gravity, wheel saturation, margins) — the method an engineer uses
   for any robot / drone / pendulum.
+- [Thermal limits and the duty ceiling](hardware/thermal_and_duty_limits.md) — why
+  the firmware's duty cap, not the wheel, is the binding constraint: the "too hot
+  to touch" event was a wiring fault (19x the power of legitimate duty 237),
+  balancing costs 0.118 W mean, and raising the *peak* ceiling buys 4.6x the
+  catch angle for 0.3 K of extra heating.
 - [Designing the reaction wheel](hardware/reaction_wheel_design.md) — sizing the
   wheel from its moment of inertia `I_w` (momentum capacity `H_max = I_w·ω_max`),
   the "mass at the rim" rule, recommended dimensions, the concentric outrunner
