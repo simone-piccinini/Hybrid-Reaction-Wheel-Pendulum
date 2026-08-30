@@ -49,6 +49,13 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   reasoning and the math behind how long the arm can be for a given motor
   (torque vs gravity, wheel saturation, margins) — the method an engineer uses
   for any robot / drone / pendulum.
+- [**Bring-up pipeline**](hardware/bringup_pipeline.md) — the staged path from a
+  built machine to a balancing controller: measure `b_p`, `K_t`, `I_b` and the
+  sensor noise on hardware (stages 0-3), feed them back into the config, and
+  only then attempt balancing. Firmware: `firmware/swing_test_v1/`.
+- [v6 firmware handoff](hardware/firmware_v6_handoff.md) — the as-flashed
+  firmware and the plant it drives, imported verbatim, with the two conclusions
+  this repo has since revised flagged at the top.
 - [Thermal limits and the duty ceiling](hardware/thermal_and_duty_limits.md) — why
   the firmware's duty cap, not the wheel, is the binding constraint: the "too hot
   to touch" event was a wiring fault (19x the power of legitimate duty 237),

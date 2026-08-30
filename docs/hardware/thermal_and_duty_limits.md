@@ -3,7 +3,7 @@
 The v6 firmware caps commanded duty at `dutyCap = 250` (throttled in practice to
 ~223) with a `HARD_DUTY_CEILING` of 450, because during bring-up the motor was
 "held locked at duty 237 for several seconds and became too hot to touch"
-(the v6 firmware handoff, §2 — not yet in this repo).
+([the v6 firmware handoff](firmware_v6_handoff.md), §2).
 
 That budget is **calibrated against a wiring fault, not a thermal limit**, and
 the cap it produces is the single largest gap between this project's simulation
