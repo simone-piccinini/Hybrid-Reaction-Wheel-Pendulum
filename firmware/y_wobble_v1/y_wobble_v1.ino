@@ -24,8 +24,12 @@
 //     Data bits 8, Stop bits 1, Parity None, Flow control NONE
 //     ^ Flow control MUST be None. XON/XOFF or RTS/CTS can stall the stream.
 //   Terminal
-//     Local echo          : Force on     <- so you can see what you type
-//     Local line editing  : Force off    <- so keys are sent immediately
+//     Local echo          : Force on   <- so you can see what you type
+//     Local line editing  : Force on   <- lets you fix typos before Enter sends
+//   You type straight into the terminal window - there is no input box. Click
+//   the window first so it has focus. Every accepted command is echoed back by
+//   the firmware as '# > <cmd>', so you can confirm input is reaching the board
+//   even with local echo off.
 //   Session > Logging
 //     Session logging     : All session output
 //     Log file name       : e.g. C:\...\results\hw\wobble.log
