@@ -113,9 +113,38 @@ tilt. A centred magnet loses field *amplitude* under tilt but preserves field
 amplified by the offset. Centring collapsed most of the error without changing
 the y-play at all.
 
-> **Only 0° has been measured.** Sensitivity varies around the circle, and the
-> position that matters for balancing is near upright. Repeat `q 180` / `g 180`
-> before trusting any balancing design.
+### At 180° (upright) — the position balancing actually lives in
+
+| capture | spread | 1σ | detrended jitter |
+|---|---|---|---|
+| quiet @ 180° | 2.988° | 0.519° | 0.405° |
+| wobble @ 180° | 3.340° | 0.534° | 0.497° |
+
+y-tilt contribution **1.49°** — inside the "second order" band. On the face of
+it, far better than the 9.14° at hanging.
+
+**Two caveats keep this from being a clean pass.**
+
+1. **The quiet baseline is contaminated.** At 0° the quiet spread was 0.176°
+   (1–2 LSB). Here it is 2.988°, seventeen times worse, and the quarter-means
+   climb 2.359 → 2.969 → 3.151 → 3.169 with a +0.106 °/s linear trend. That is
+   an arm still settling against its stop, not sensor noise. Removing the trend
+   leaves 0.405° of jitter. Since the quadrature subtraction assumes the two
+   captures share a baseline, a settling transient in the *quiet* run inflates
+   what gets subtracted and flatters the result.
+
+2. **A small wobble response may mean an insensitive sensor, not a good one.**
+   §2 measured the 90–180° segment at local gain **0.29**. Where the sensor
+   under-responds to angle it also under-responds to tilt — so a small apparent
+   wobble at upright is exactly what a *compressed* region would produce. That
+   would be bad news wearing good news' clothes: gain 0.29 at upright is outside
+   the loop's [0.45, 2.20] tolerance.
+
+**What settles it:** re-run the §2 four-point linearity check now that the
+magnet has been re-centred. If the local gain near upright is close to 1.0, the
+1.49° is real and upright is in good shape. If it is still ~0.3, the wobble
+number is an artefact of compression and the mount needs more work regardless.
+That check costs two minutes and gates the balancing attempt.
 
 ---
 
@@ -199,9 +228,17 @@ or an IMU on the arm (which also fixes the `θ̇_p` differencing problem in §1)
 ## 6. Status and next steps
 
 - ✅ Noise floor — both channels pass with margin
-- ⚠️ Linearity — improved but **only 0° re-verified**; repeat the 4-point check
-- ⚠️ Wobble — 39.5° → 9.14°, marginal; measure at **180° (upright)** next
-- ⛔ Balancing — not until the upright-position wobble is known
+- ⚠️ Linearity — **not re-measured since the magnet was re-centred.** This is
+  now the single outstanding Stage 0 item, and it gates balancing.
+- 🟡 Wobble — measured at both ends: **9.14° at hanging** (marginal),
+  **1.49° at upright** (looks good, but see the two caveats in §3)
+- ⛔ Balancing — gated on the linearity re-check
+- ✅ **Stage 1 (free swing) is clear to run.** It is the stage least exposed to
+  these faults: `I_b` comes from the swing *period*, which is pure timing and
+  immune to any angle distortion, and `b_p` comes from the log decrement, a
+  *ratio* of amplitudes in which a constant local gain error cancels. Only
+  nonlinearity across the ±25° swing and the wobble scatter degrade it, and
+  both are second-order there.
 
 **Independent of all of the above**, Stage 2 (wheel spin-up / coast-down) uses
 only encoder A on the motor rotor and requires the arm clamped anyway. It yields

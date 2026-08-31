@@ -177,9 +177,8 @@ void loop() {
       if (millis() - lastIdle >= 1000) {
         lastIdle = millis();
         if (sensorB_present) {
-          Serial.print("  idle   pivot ");
-          Serial.print(sensorB_cont - pivotZero, 2);
-          Serial.println(" deg");
+          Serial.print("# idle,pivot_deg,");
+          Serial.println(sensorB_cont - pivotZero, 2);
         }
       }
       delay(2);
@@ -532,17 +531,26 @@ void printStatus() {
   Serial.println();
 }
 
+// Accepts CR, LF or CRLF. PuTTY sends CR on Enter, the Arduino Serial Monitor
+// sends LF. Accepting only LF made 'x' (disarm) unreachable from PuTTY, which
+// matters because that is the stop command.
 void handleSerial() {
   static char buf[48];
   static int idx = 0;
+  static bool lastWasCR = false;
   while (Serial.available()) {
     char ch = Serial.read();
-    if (ch == '\r') continue;
-    if (ch == '\n' || idx >= (int)sizeof(buf) - 1) {
+    if (ch == '\r' || ch == '\n') {
+      if (ch == '\n' && lastWasCR) { lastWasCR = false; continue; }
+      lastWasCR = (ch == '\r');
       buf[idx] = 0;
       if (idx > 0) command(buf);
       idx = 0;
-    } else buf[idx++] = ch;
+      continue;
+    }
+    lastWasCR = false;
+    if (ch == 8 || ch == 127) { if (idx > 0) idx--; continue; }   // backspace
+    if (idx < (int)sizeof(buf) - 1) buf[idx++] = ch;
   }
 }
 
