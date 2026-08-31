@@ -44,12 +44,55 @@ def _stats(vals: list[float]) -> dict:
             "spread": max(vals) - min(vals), "std": math.sqrt(max(0.0, var))}
 
 
+# The loop's measured gain margin is 6.85 dB (x2.20), so a sensor whose local
+# gain falls outside this band breaks the controller no matter how it is tuned.
+GAIN_LO, GAIN_HI = 0.45, 2.20
+
+
+def report_linearity(marks: list[dict]) -> None:
+    """Stage 0b: local gain between consecutive '# mark' points."""
+    if len(marks) < 2:
+        return
+    marks = sorted(marks, key=lambda m: m["true_deg"])
+    print("\nLINEARITY (Stage 0b) — from '# mark' points\n")
+    print(f"  {'true':>7} {'measured':>10} {'error':>8} {'local gain':>11}  ")
+    prev = None
+    gains = []
+    for m in marks:
+        t, v = m["true_deg"], m["measured_deg"]
+        g = ""
+        if prev is not None and t != prev[0]:
+            k = (v - prev[1]) / (t - prev[0])
+            gains.append((prev[0], t, k))
+            flag = "" if GAIN_LO <= k <= GAIN_HI else "  <-- OUTSIDE [0.45, 2.20]"
+            g = f"{k:11.2f}{flag}"
+        print(f"  {t:>7.1f} {v:>10.2f} {v - t:>+8.2f} {g}")
+        prev = (t, v)
+    if not gains:
+        return
+    ks = [k for _, _, k in gains]
+    span = max(ks) / min(ks) if min(ks) > 0 else float("inf")
+    print(f"\n  local gain {min(ks):.2f} .. {max(ks):.2f}   ({span:.1f}x variation; "
+          f"a correct mount is 1.00 everywhere)")
+    bad = [(a, b, k) for a, b, k in gains if not (GAIN_LO <= k <= GAIN_HI)]
+    if bad:
+        print("\n  VERDICT: at least one segment is outside the loop's gain-margin")
+        print("  tolerance. In that region the controller sees the wrong amount of")
+        print("  tilt and no choice of (Q,R,W,V) fixes it. Segments:")
+        for a, b, k in bad:
+            print(f"    {a:.0f}-{b:.0f} deg  gain {k:.2f}")
+    else:
+        print("\n  VERDICT: every segment is inside [0.45, 2.20]. Linearity is no")
+        print("  longer the blocker; judge the build on the wobble numbers above.")
+
+
 def parse_file(path: Path) -> list[dict]:
     """Pull every capture out of one session log."""
     out: list[dict] = []
     cur: dict | None = None
     samples: list[float] = []
     col = None
+    marks: list[dict] = []
 
     def flush() -> None:
         nonlocal cur, samples, col
@@ -79,6 +122,18 @@ def parse_file(path: Path) -> list[dict]:
         if line.startswith("#"):
             body = line.lstrip("#").strip()
             parts = [p.strip() for p in body.split(",")]
+            # marks are emitted OUTSIDE any #BEGIN/#END block, so they must be
+            # handled before the "are we inside a capture" guard below
+            if parts[0] == "mark":
+                d = {}
+                for i in range(1, len(parts) - 1, 2):
+                    try:
+                        d[parts[i]] = float(parts[i + 1])
+                    except ValueError:
+                        pass
+                if "true_deg" in d and "measured_deg" in d:
+                    marks.append(d)
+                continue
             if cur is None:
                 continue
             if parts[0] == "test" and len(parts) > 1:
@@ -119,6 +174,9 @@ def parse_file(path: Path) -> list[dict]:
             continue
 
     flush()
+    for m in marks:
+        m["kind"] = "mark"
+        out.append(m)
     return out
 
 
@@ -141,14 +199,21 @@ def main() -> None:
     recs: list[dict] = []
     for p in paths:
         recs.extend(parse_file(p))
-    if not recs:
-        raise SystemExit("no captures found - keep the '#BEGIN'/'#END' lines "
-                         "when saving the session log")
+    marks = [r for r in recs if r.get("kind") == "mark"]
+    recs = [r for r in recs if r.get("kind") != "mark"]
+    if not recs and not marks:
+        raise SystemExit("nothing found - keep the '#BEGIN'/'#END' and '# mark' "
+                         "lines when saving the session log")
 
     # last capture wins if a position was repeated
     quiet = {r["nominal_deg"]: r for r in recs if r.get("kind") == "yquiet"}
     wob = {r["nominal_deg"]: r for r in recs if r.get("kind") == "ywobble"}
     angles = sorted(set(quiet) | set(wob))
+
+    if marks:
+        report_linearity(marks)
+    if not recs:
+        return
 
     n_samp = sum(1 for r in recs if r.get("source") == "samples")
     print(f"Parsed {len(recs)} capture(s) from {len(paths)} file(s) "

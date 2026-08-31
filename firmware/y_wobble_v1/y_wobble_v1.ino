@@ -237,6 +237,33 @@ void endCapture() {
   Serial.println();
 }
 
+// ---------------------------------------------------------------- linearity
+
+// Stage 0b. Hold the arm at a KNOWN mechanical angle and record what the
+// encoder reports, averaged over a second so one noisy sample cannot decide it.
+// Reading this off the idle line by eye is how a 5x local gain error went
+// unnoticed through two passing noise tests.
+void mark(float trueDeg) {
+  if (!encoderPresent) { Serial.println("# error,encoder not found"); return; }
+  const int N = 200;
+  float sum = 0, sq = 0, lo = 1e9, hi = -1e9;
+  for (int i = 0; i < N; i++) {
+    updateEncoder();
+    float a = pivotAngle();
+    sum += a; sq += a * a;
+    if (a < lo) lo = a;
+    if (a > hi) hi = a;
+    delay(5);                      // 200 x 5 ms = 1 s; the motor is never enabled
+  }
+  float mean = sum / N;
+  float var = sq / N - mean * mean;
+  if (var < 0) var = 0;
+  Serial.print("# mark,true_deg,");  Serial.print(trueDeg, 2);
+  Serial.print(",measured_deg,");    Serial.print(mean, 3);
+  Serial.print(",std,");             Serial.print(sqrtf(var), 4);
+  Serial.print(",spread,");          Serial.println(hi - lo, 3);
+}
+
 // ---------------------------------------------------------------- encoder
 
 float pivotAngle() { return pivotCont - pivotZero; }
@@ -304,6 +331,7 @@ void printHelp() {
   Serial.println("# q <deg>    QUIET capture  (do not touch the arm)");
   Serial.println("# g <deg>    WOBBLE capture (push through the full y play)");
   Serial.println("# <Enter>    stop the capture, print the summary");
+  Serial.println("# m <deg>    LINEARITY: record the reading at a known angle");
   Serial.println("# f <hz>     log rate 10..1000 (now: see '# log rate' above)");
   Serial.println("# s status   b rescan   ? help");
   Serial.println("#");
@@ -361,6 +389,7 @@ void command(char* c) {
   switch (c[0]) {
     case 'q': startCapture(false, v); break;
     case 'g': startCapture(true,  v); break;
+    case 'm': mark(v); break;
     case 'f': {
       long hz = (long)v;
       if (hz < LOG_HZ_MIN || hz > LOG_HZ_MAX) {

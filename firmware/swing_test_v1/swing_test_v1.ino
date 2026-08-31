@@ -116,6 +116,8 @@ unsigned long movingSince = 0;
 // logging / test state
 unsigned long logStart = 0, logUntil = 0, lastLogUs = 0;
 unsigned long pulseUntil = 0;
+unsigned long coastAt = 0;               // 'd': when to release into a coast
+const unsigned long SPINUP_MS = 3000;    // drive time before releasing
 float pumpGain = 8.0f, pumpAbortDeg = 15.0f;
 float pivotVel = 0, pivotPrev = 0;
 unsigned long pivotPrevUs = 0;
@@ -212,6 +214,13 @@ void loop() {
 
   // ---- mode dispatch ----
   if (mode == PULSE && now >= pulseUntil) { dutyRequest = 0; mode = TORQUE; }
+
+  // 'd' coast-down: release the drive once the wheel has reached steady state
+  if (coastAt && now >= coastAt) {
+    coastAt = 0;
+    mode = COAST; dutyRequest = 0;
+    Serial.println("# note,releasing into coast");
+  }
 
   if (mode == COAST) dutyRequest = 0;
 
@@ -610,11 +619,14 @@ void command(char* c) {
 
     case 'd':
       if (!armed) { Serial.println("  Arm first with 'r'."); break; }
-      Serial.println("  STAGE 2 coast-down: spinning up, then releasing.");
+      Serial.println("  STAGE 2 spin-up then coast. IS THE ARM CLAMPED?");
+      // Must NOT block here. A delay() in the command handler stops the main
+      // loop, so writePhases() never runs, the field freezes at its last angle
+      // and the rotor LOCKS instead of spinning up - then "coasts" from zero.
+      // Schedule the transition and let loop() do it.
       mode = TORQUE; dutyRequest = v1; movingSince = millis();
-      delay(2500);                       // reach steady state, then coast
-      mode = COAST; dutyRequest = 0;
-      startLog(LOG_SPIN, 8);
+      coastAt = millis() + SPINUP_MS;
+      startLog(LOG_SPIN, 12);            // 3 s driving + ~9 s coasting
       break;
 
     case 't':
