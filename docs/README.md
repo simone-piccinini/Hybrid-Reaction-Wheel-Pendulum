@@ -49,6 +49,10 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   reasoning and the math behind how long the arm can be for a given motor
   (torque vs gravity, wheel saturation, margins) — the method an engineer uses
   for any robot / drone / pendulum.
+- [Sensor characterisation](hardware/sensor_characterisation.md) — the measured
+  Stage 0 lab record for the real machine: noise floors, the encoder linearity
+  fault the noise test missed, the out-of-plane wobble, and what the measured
+  numbers do to the achievable controller.
 - [**Bring-up pipeline**](hardware/bringup_pipeline.md) — the staged path from a
   built machine to a balancing controller: measure `b_p`, `K_t`, `I_b` and the
   sensor noise on hardware (stages 0-3), feed them back into the config, and
