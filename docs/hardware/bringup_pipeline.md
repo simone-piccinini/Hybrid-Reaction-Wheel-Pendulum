@@ -13,6 +13,21 @@ simulation you finally tune against is the machine you actually built.
 Firmware for stages 0–3: [`firmware/swing_test_v1/`](../../firmware/swing_test_v1/).
 Analysis: [`scripts/identify_parameters.py`](../../scripts/identify_parameters.py).
 
+**Capturing the serial output.** Use
+[`scripts/serial_log.py`](../../scripts/serial_log.py) rather than a terminal's
+own logging feature:
+
+```bash
+python scripts/serial_log.py COM3 data/hw/s0c_wobble_180deg.log
+```
+
+It creates the folder, flushes after every line, and reports how many lines it
+wrote. PuTTY's session logging fails *silently* when the target folder does not
+exist or the settings landed on a different saved session, which costs a whole
+measurement session to notice. Raw captures belong in
+[`data/hw/`](../../data/hw/), which is version controlled - unlike `results/`,
+they cannot be regenerated.
+
 ---
 
 ## Why these parameters and not others
