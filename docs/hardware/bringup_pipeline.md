@@ -53,6 +53,95 @@ the guessed `[1.0e-3, 1.0e-2]`.
 
 ---
 
+## Stage 0b — Encoder LINEARITY (added after it caught a real fault)
+
+**Risk: none.** Motor unpowered.
+
+Stage 0 measures *noise*. It does not measure whether the angle the encoder
+reports is the angle the arm is actually at — and on this build the noise floor
+passed twice while the pivot encoder was reporting 100° for a true 180°.
+
+```
+o           # zero at the hanging position
+```
+
+Then rotate the arm **slowly by hand**, stopping at known mechanical angles
+(90/180/270/360, measured with a protractor or phone inclinometer), and read the
+idle line at each stop.
+
+**Pass:** each stop reads within a few degrees of truth, and a full turn reads
+~360°.
+
+**What a failure looks like on this build:**
+
+| mechanical | measured | local gain |
+|---|---|---|
+| 0° | 0.0 | — |
+| 90° | 74.2 | 0.82 |
+| 180° | 100.5 | **0.29** |
+| 270° | 235.0 | 1.49 |
+| 360° | 366.0 | 1.46 |
+
+A full turn totalling 366° proves the sensor, wiring and unwrapping are fine —
+the distortion is purely geometric, the signature of an **off-axis magnet**. The
+AS5600 reads field *direction*; a magnet that is not on the rotation axis orbits
+the chip instead of spinning in place, so the direction tracks mechanical angle
+nonlinearly while still summing to 360° over a full turn.
+
+**Why this blocks everything downstream:** the measured gain margin of the tuned
+LQG is 6.85 dB (×2.20), so the loop tolerates a sensor gain between **0.45 and
+2.20**. A local gain of **0.29 is outside that** — in that region the controller
+sees under a third of the tilt that exists and pushes back with under a third of
+the torque. No choice of `(Q, R, W, V)` fixes it.
+
+Concentricity tolerance is about **0.25 mm**, far tighter than the 0.5–3 mm gap
+spec. Mount the magnet in a recess at the **end of the pivot shaft** so it is
+centred by construction and cannot be displaced by swinging.
+
+---
+
+## Stage 0c — y-wobble: can the distortion be calibrated away?
+
+**Risk: none.** [`firmware/y_wobble_v1/`](../../firmware/y_wobble_v1/) contains
+no commutation code at all; the driver pins are driven low at boot and never
+touched.
+
+If the mechanical mount cannot be made perfect, the distortion may still be
+correctable — but only if it is a function of **one** variable. Ask:
+
+- **One variable** (swing angle only): the map is invertible, a lookup table
+  recovers the true angle.
+- **Two variables** (swing angle *and* out-of-plane tilt): one measurement
+  cannot recover two unknowns. **No lookup table can fix it.**
+
+Pin the swing angle against a fixed stop — *it must not move* — then:
+
+```
+q 180       # QUIET baseline: do not touch the arm
+g 180       # WOBBLE: push through the full y play, out of plane only
+```
+
+Repeat near 0°, 90° and 180°, since sensitivity varies around the circle.
+
+```bash
+python scripts/analyze_wobble.py results/hw/wobble.txt
+```
+
+It subtracts the quiet spread from the wobble spread in quadrature, leaving the
+y-tilt contribution alone:
+
+| y-tilt alone | meaning |
+|---|---|
+| **< 3°** | second order → build the calibration map |
+| **3–10°** | marginal → map helps, residual must go into the Kalman `R`, and it will eat phase margin |
+| **> 10°** | two-variable → mechanical constraint or a second sensor; a map cannot help |
+
+**A calibration map is only valid while the magnet stays put.** Re-run stage 0b
+before any serious session; it takes 30 seconds and is the cheapest insurance in
+the build.
+
+---
+
 ## Stage 1 — Free swing, motor unpowered
 
 **Risk: low.** Motor unpowered; the pendulum is just a pendulum.
