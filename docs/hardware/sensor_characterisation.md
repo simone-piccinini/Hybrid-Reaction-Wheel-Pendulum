@@ -225,7 +225,75 @@ or an IMU on the arm (which also fixes the `θ̇_p` differencing problem in §1)
 
 ---
 
-## 6. Status and next steps
+## 6. Stage 1 — free swing, measured
+
+Motor unpowered, arm displaced ~25° from hanging and released, 20 s at 200 Hz.
+Raw capture: [`data/hw/s1_freeswing.log`](../../data/hw/s1_freeswing.log).
+
+| parameter | previous | **measured** | |
+|---|---|---|---|
+| `body_inertia` `I_b` | 0.0022725 (CAD) | **0.00224935** | **1.0% apart — CAD validated** |
+| `pivot_friction` `b_p` | 0.01 (**guess**) | **0.000268852** | **37× smaller than guessed** |
+
+Derived: `ω_n = 8.129 rad/s`, period **0.773 s** against 0.777 s predicted from
+CAD (0.5% apart), damping ratio `ζ = 0.0074` — a very lightly damped pendulum.
+
+Two things follow.
+
+**The CAD model is trustworthy.** `I_b` from the swing period agrees with the
+solid model to 1%, and the period matches the prediction to 0.5%. That is a real
+validation of the mass and length figures, obtained from timing alone and so
+immune to every angle-distortion problem in §2 and §3.
+
+**Swing-up flips from impossible to comfortable.** The feasibility condition in
+[swingup.md](../theory/swingup.md) needs `b_p < ~0.0027`. At the guessed 0.01 the
+pivot friction bled energy faster than the wheel could pump it in, and the
+maneuver could not work at any gain. At the measured 0.000269 there is a **10×
+margin**: the analysis now reports the friction cap at 165 rad/s against the
+16.3 rad/s actually needed at the bottom. Simulated on the identified plant, the
+arm swings up in **2.34 s** and the LQG catches it.
+
+### Re-tuned on the fully identified plant
+
+| | guessed `I_b`/`b_p` | **measured `I_b`/`b_p`** |
+|---|---|---|
+| best observed cost | 883.6 | 1539.9 |
+| max recoverable tilt | 6.12° | **10.69°** |
+| phase margin | −2.6° | **−21.2°** |
+| peak commanded `u` | 12.9 V | **17.4 V** (past the 12 V rail) |
+
+A mixed result, and worth stating plainly: the real plant is **harder to
+balance** than the guessed one. Removing 37× of assumed pivot friction removes
+37× of free damping, so the controller has to supply all of it — the same point
+the v6 handoff makes about `b_emf` being tiny and the loop's derivative action
+doing essentially all the damping.
+
+The larger catch angle is not a straight win either: it is reached with the
+command saturating well past the rail, and the two rows are different
+controllers on different plants, not one controller compared fairly.
+
+**The phase margin has now come out negative on three separate tunings**
+(+2.3°, −2.6°, −21.2°) whenever the measured pivot noise is included. Each
+rollout is closed-loop stable in simulation — these are conditionally stable
+loops, hence the infinite gain margins — but a loop with no phase margin at its
+gain crossover has *no delay tolerance*, and the real firmware carries 11–21 ms.
+The exact value is not to be trusted at this noise level; the pattern is.
+
+**The binding constraint is the pivot sensor, not the plant parameters.** No
+amount of re-tuning recovers phase margin while `measurement_std[0]` is
+0.046 rad.
+
+> `b_p` here includes a little drag from the wheel turning in its own bearing,
+> since the wheel was left free. That biases the figure *high*, so the true pivot
+> friction is at most this — which only strengthens the swing-up conclusion.
+
+This is the clearest payoff of the pipeline so far: a parameter that was a pure
+guess, wrong by 37×, and it was silently deciding whether an entire capability
+was possible.
+
+---
+
+## 7. Status and next steps
 
 - ✅ Noise floor — both channels pass with margin
 - ⚠️ Linearity — **not re-measured since the magnet was re-centred.** This is
@@ -233,12 +301,10 @@ or an IMU on the arm (which also fixes the `θ̇_p` differencing problem in §1)
 - 🟡 Wobble — measured at both ends: **9.14° at hanging** (marginal),
   **1.49° at upright** (looks good, but see the two caveats in §3)
 - ⛔ Balancing — gated on the linearity re-check
-- ✅ **Stage 1 (free swing) is clear to run.** It is the stage least exposed to
-  these faults: `I_b` comes from the swing *period*, which is pure timing and
-  immune to any angle distortion, and `b_p` comes from the log decrement, a
-  *ratio* of amplitudes in which a constant local gain error cancels. Only
-  nonlinearity across the ±25° swing and the wobble scatter degrade it, and
-  both are second-order there.
+- ✅ **Stage 1 done** (§6): `I_b` measured and agreeing with CAD to 1%, `b_p`
+  measured at 37× below the guess, and swing-up consequently feasible.
+- ⬜ Stage 2 (wheel: `K_t`, wheel friction, the 10 Ω question) — needs the arm
+  clamped, uses only encoder A, unaffected by the pivot faults above.
 
 **Independent of all of the above**, Stage 2 (wheel spin-up / coast-down) uses
 only encoder A on the motor rotor and requires the arm clamped anyway. It yields
