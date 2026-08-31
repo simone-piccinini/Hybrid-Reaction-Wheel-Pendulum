@@ -1,0 +1,170 @@
+{
+  "git_hash": "035706e41b59660200e9a1cfb71cc4a2b41c7abe",
+  "seed": 0,
+  "timestamp_utc": "2026-08-31T09:45:47.967662+00:00",
+  "config": {
+    "name": "pendulum_build_v2_measured",
+    "seed": 0,
+    "plant": {
+      "pendulum_mass": 0.101,
+      "pendulum_length": 0.15,
+      "body_inertia": 0.0022725,
+      "wheel": {
+        "mass": 0.04100541,
+        "radius": 0.051,
+        "inertia": 6.11725e-05,
+        "friction_coefficient": 0.0001
+      },
+      "motor": {
+        "resistance": 10.0,
+        "torque_constant": 0.037,
+        "back_emf_constant": 0.037,
+        "inductance": 0.0,
+        "rotor_inertia": 0.0,
+        "friction_coefficient": 0.0,
+        "max_voltage": 12.0,
+        "max_current": Infinity
+      },
+      "pivot_friction": 0.01,
+      "gravity": 9.81
+    },
+    "simulation": {
+      "dt": 0.01,
+      "simulation_time": 10.0,
+      "initial_state": [
+        0.05,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "disturbances": {
+        "process_std": [
+          0.0,
+          0.0001,
+          0.0,
+          0.01
+        ],
+        "measurement_std": [
+          0.04592,
+          0.4665
+        ],
+        "initial_state_std": null
+      },
+      "divergence_angle": 1.5708
+    },
+    "objective": {
+      "Mp_desired": 15.0,
+      "Ts_desired": 2.0,
+      "Mp_max": 40.0,
+      "Ts_max": 6.0,
+      "w_error": 100.0,
+      "w_control": 0.1,
+      "w_overshoot": 100.0,
+      "w_settling": 100.0,
+      "U_max": 12.0,
+      "w_saturation": 10.0,
+      "PM_min": 30.0,
+      "GM_min": 6.0,
+      "w_phase_margin": 50.0,
+      "w_gain_margin": 20.0,
+      "error_state_index": 0,
+      "penalty": 5000.0
+    },
+    "search_space": {
+      "lower_bounds": [
+        0.0,
+        -1.0,
+        -7.0,
+        -7.0,
+        -1.0,
+        -19.0,
+        -15.0,
+        -19.0,
+        -11.0,
+        -12.0,
+        -8.0
+      ],
+      "upper_bounds": [
+        4.0,
+        2.0,
+        -2.0,
+        -2.0,
+        2.0,
+        -8.0,
+        -8.0,
+        -8.0,
+        -6.0,
+        -4.0,
+        1.0
+      ],
+      "log_scale": null
+    },
+    "gp": {
+      "kernel": "matern52",
+      "lengthscales": null,
+      "signal_variance": 1.0,
+      "noise_variance": 0.01
+    },
+    "acquisition": {
+      "kind": "entropy_search",
+      "params": {
+        "n_optimum_samples": 200,
+        "n_representers": 50,
+        "n_fantasies": 10,
+        "n_candidates": 200
+      }
+    },
+    "optimization": {
+      "n_initial": 8,
+      "n_iterations": 20,
+      "n_rollouts_per_eval": 1,
+      "optimize_hyperparameters": true
+    }
+  },
+  "metrics": {
+    "objective": 5000.0,
+    "itae": 0.0,
+    "overshoot": 0.0,
+    "settling_time": 0.0,
+    "control_effort": 0.0,
+    "oscillation_energy": 0.0,
+    "trajectory_entropy": 0.0,
+    "diverged": true,
+    "best_observed_cost": 883.5619925349414,
+    "n_evaluations": 28
+  },
+  "summary": {
+    "best_theta": [
+      3.9475711155884987,
+      1.6631232969834238,
+      -5.009557049102877,
+      -2.89497908340981,
+      1.3031009807472493,
+      -11.521404325404383,
+      -14.654354898671697,
+      -12.288220468898011,
+      -6.168416201052467,
+      -10.961395149716164,
+      -3.047127123751461
+    ],
+    "best_config_Q_diag": [
+      51.809374903779926,
+      5.275762913116334,
+      0.006673858843389985,
+      0.05530018177383405
+    ],
+    "best_config_R_diag": [
+      3.680692746319666
+    ],
+    "best_config_W_diag": [
+      9.915569837255611e-06,
+      4.3220972210341873e-07,
+      4.605678916189628e-06,
+      0.0020945507221251758
+    ],
+    "best_config_V_diag": [
+      1.735907471957552e-05,
+      0.04749517634396811
+    ]
+  }
+}

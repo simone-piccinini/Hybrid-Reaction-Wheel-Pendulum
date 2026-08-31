@@ -1,0 +1,193 @@
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# > ?
+#
+# o          zero the pivot here
+# q <deg>    QUIET capture  (do not touch the arm)
+# g <deg>    WOBBLE capture (push through the full y play)
+# <Enter>    stop the capture, print the summary
+# m <deg>    LINEARITY: record the reading at a known angle
+# f <hz>     log rate 10..1000 (now: see '# log rate' above)
+# s status   b rescan   ? help
+#
+# suggested: at each of 0, 90, 180 deg ->  q <deg>  then  g <deg>
+#
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# > ?
+#
+# o          zero the pivot here
+# q <deg>    QUIET capture  (do not touch the arm)
+# g <deg>    WOBBLE capture (push through the full y play)
+# <Enter>    stop the capture, print the summary
+# m <deg>    LINEARITY: record the reading at a known angle
+# f <hz>     log rate 10..1000 (now: see '# log rate' above)
+# s status   b rescan   ? help
+#
+# suggested: at each of 0, 90, 180 deg ->  q <deg>  then  g <deg>
+#
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# idle,pivot_deg,37.97
+# > o
+# ok,pivot zeroed
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# > m 0
+# mark,true_deg,0.00,measured_deg,0.000,std,0.0000,spread,0.000
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# idle,pivot_deg,0.00
+# > m 90
+# mark,true_deg,90.00,measured_deg,0.000,std,0.0000,spread,0.000
+# idle,pivot_deg,0.00
+# idle,pivot_deg,-9.32
+# idle,pivot_deg,-3.60
+# idle,pivot_deg,20.48
+# idle,pivot_deg,21.62
+# idle,pivot_deg,21.18
+# idle,pivot_deg,22.06
+# idle,pivot_deg,22.41
+# idle,pivot_deg,22.59
+# idle,pivot_deg,22.24
+# idle,pivot_deg,22.50
+# idle,pivot_deg,21.80
+# idle,pivot_deg,20.21
+# idle,pivot_deg,18.46
+# > m 90
+# mark,true_deg,90.00,measured_deg,20.257,std,0.6210,spread,2.285
+# idle,pivot_deg,19.78
+# idle,pivot_deg,20.39
+# idle,pivot_deg,21.36
+# idle,pivot_deg,20.74
+# idle,pivot_deg,20.83
+# idle,pivot_deg,21.53
+# idle,pivot_deg,26.10
+# idle,pivot_deg,43.51
+# idle,pivot_deg,33.84
+# idle,pivot_deg,25.66
+# idle,pivot_deg,25.49
+# idle,pivot_deg,21.71
+# idle,pivot_deg,27.77
+# idle,pivot_deg,30.06
+# idle,pivot_deg,27.69
+# idle,pivot_deg,34.10
+# idle,pivot_deg,31.11
+# idle,pivot_deg,44.21
+# idle,pivot_deg,-31.90
+# idle,pivot_deg,16.52
+# idle,pivot_deg,38.32
+# idle,pivot_deg,34.72
+# idle,pivot_deg,37.00
+# idle,pivot_deg,37.62
+# idle,pivot_deg,38.85
+# idle,pivot_deg,32.08
+# > m 180
+# mark,true_deg,180.00,measured_deg,28.917,std,0.5026,spread,2.021
+# idle,pivot_deg,28.04
+# idle,pivot_deg,30.32
+# idle,pivot_deg,29.71
+# idle,pivot_deg,29.53
+# idle,pivot_deg,35.16
+# idle,pivot_deg,50.80
+# idle,pivot_deg,74.71
+# idle,pivot_deg,89.21
+# idle,pivot_deg,89.91
+# idle,pivot_deg,91.32
+# idle,pivot_deg,90.97
+# > m 270
+# mark,true_deg,270.00,measured_deg,89.205,std,0.5639,spread,1.758
+# idle,pivot_deg,90.18
+# idle,pivot_deg,90.35
+# idle,pivot_deg,89.65
+# idle,pivot_deg,88.68
+# idle,pivot_deg,88.95
+# idle,pivot_deg,88.68
+# idle,pivot_deg,89.21
+# idle,pivot_deg,89.21
+# idle,pivot_deg,-19.25
+# idle,pivot_deg,46.58
+# idle,pivot_deg,97.38
+# idle,pivot_deg,34.37
+# idle,pivot_deg,-11.69
+# idle,pivot_deg,-19.42
+# idle,pivot_deg,36.47
+# idle,pivot_deg,59.50
+# idle,pivot_deg,-13.10
+# idle,pivot_deg,-12.66
+# idle,pivot_deg,23.03
+# idle,pivot_deg,-8.96
+# idle,pivot_deg,3.96
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.81
+# idle,pivot_deg,-2.81
+# > m 360
+# mark,true_deg,360.00,measured_deg,-2.754,std,0.0415,spread,0.088
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72
+# idle,pivot_deg,-2.72

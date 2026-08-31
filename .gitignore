@@ -10,14 +10,20 @@ __pycache__/
 # Testing
 .pytest_cache/
 
+# Editors / IDEs
+.theia/
+.vscode/
+.idea/
+
 # macOS
 .DS_Store
-
-# Generated outputs (not for version control)
-results/
-experiments/*/results/
 
 from_last_time.txt
 
 # Local implementation notes — kept off GitHub on purpose
 docs/implementation_notes/
+
+# NOTE: results/ is intentionally NOT ignored. Experiment run records (config,
+# seed, git hash, metrics, trajectories, plots) are the evidence behind every
+# number quoted in docs/, so they are version controlled alongside the raw
+# hardware captures in data/hw/.
