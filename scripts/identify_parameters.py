@@ -74,23 +74,50 @@ def load(path: Path) -> tuple[str, dict[str, np.ndarray]]:
 # --------------------------------------------------------------------------
 # stage 0 - sensor noise
 # --------------------------------------------------------------------------
-def identify_noise(c: dict[str, np.ndarray]) -> dict:
-    """Stationary noise floor -> the Kalman ``V`` / measurement_std entries."""
+def identify_noise(c: dict[str, np.ndarray], dt: float) -> dict:
+    """Stationary noise floor -> the ``measurement_std`` / Kalman ``V`` entries.
+
+    Both channels are measured as ANGLES, because that is what the encoders
+    actually report. The simulation's second measurement is a wheel *rate*, and
+    a rate obtained by differencing successive angles over ``dt`` has
+
+        sigma_rate = sqrt(2) * sigma_angle / dt,
+
+    which is where the rate noise entry comes from. It is strongly ``dt``
+    dependent — at 100 Hz a 0.3 deg angle noise becomes ~0.74 rad/s of rate
+    noise — so the sample rate is reported alongside it.
+    """
     piv = np.radians(c["pivot_deg"])
-    whl = np.radians(c["wheel_dps"])
     out = {
+        "samples": int(piv.size),
         "pivot_std_rad": float(piv.std(ddof=1)),
         "pivot_std_deg": float(np.degrees(piv.std(ddof=1))),
-        "wheel_rate_std_rad_s": float(whl.std(ddof=1)),
         "pivot_p2p_deg": float(np.ptp(c["pivot_deg"])),
-        "samples": int(piv.size),
     }
-    # A drifting mean over a "stationary" log means the channel is not just
-    # white - most likely slip-ring supply modulation on the analog encoder.
-    half = piv.size // 2
-    out["pivot_mean_drift_deg"] = float(
-        np.degrees(abs(piv[half:].mean() - piv[:half].mean()))
-    )
+    if "wheel_deg" in c:
+        whl = np.radians(c["wheel_deg"])
+        out["wheel_std_deg"] = float(np.degrees(whl.std(ddof=1)))
+        out["wheel_std_rad"] = float(whl.std(ddof=1))
+        out["assumed_dt_s"] = dt
+        out["wheel_rate_std_rad_s"] = float(math.sqrt(2.0) * whl.std(ddof=1) / dt)
+    else:
+        # older captures without the wheel_deg column
+        out["wheel_rate_std_rad_s"] = float(np.radians(c["wheel_dps"]).std(ddof=1))
+        out["note"] = "no wheel_deg column; rate std taken directly"
+
+    # A drifting mean over a supposedly stationary log means the channel is not
+    # merely white. On the analog encoder that usually means slip-ring supply
+    # modulation - correlated noise, which a Kalman filter handles worst.
+    for key, col in (("pivot", "pivot_deg"), ("wheel", "wheel_deg")):
+        if col not in c:
+            continue
+        x = c[col]
+        half = x.size // 2
+        drift = float(abs(x[half:].mean() - x[:half].mean()))
+        out[f"{key}_mean_drift_deg"] = drift
+        if drift > 3.0 * float(x.std(ddof=1)):
+            out[f"{key}_WARNING"] = ("mean drifts by more than 3 sigma - this "
+                                     "channel is not white noise")
     return out
 
 
@@ -385,6 +412,9 @@ def main() -> None:
     ap.add_argument("--wheel-inertia", type=float, default=DEF_JW)
     ap.add_argument("--rail", type=float, default=DEF_RAIL)
     ap.add_argument("--resistance", type=float, default=DEF_R)
+    ap.add_argument("--dt", type=float, default=0.02,
+                    help="control period the rate noise is quoted for "
+                         "(default 0.02 = the firmware config's 50 Hz)")
     a = ap.parse_args()
 
     p = Path(a.logdir)
@@ -410,7 +440,7 @@ def main() -> None:
     for f, kind, c in loaded:
         try:
             if kind == "noise":
-                res["noise"] = identify_noise(c)
+                res["noise"] = identify_noise(c, a.dt)
             elif kind == "freeswing":
                 res["freeswing"] = identify_free_swing(c, a.mass, a.length)
             elif kind == "spin":

@@ -46,6 +46,12 @@ const int PIN_SENSOR_OUT = 23;
 const int ADC_BITS = 12;
 const int ADC_MAX  = (1 << ADC_BITS) - 1;
 
+// Nominal counts per full turn, used ONLY before self-calibration so that
+// stage 0 can measure encoder A's noise floor without arming the motor. The
+// handoff measured 4060-4065 counts consistently across runs. Do not use this
+// for commutation - that needs the machine-driven sweep (handoff section 4.3).
+const float NOMINAL_SPAN_COUNTS = 4062.0f;
+
 // ---- Sensor B: I2C (PENDULUM PIVOT) ----
 #define AS5600_ADDR 0x36
 #define REG_ANGLE   0x0E
@@ -161,7 +167,11 @@ void loop() {
   // ---- unarmed logging modes (stage 0 and 1): motor never enabled ----
   if (!armed) {
     killOutputs();
-    if (logKind == LOG_NOISE || logKind == LOG_SWING) serviceLog(0.0f);
+    // Encoder A is logged from the RAW ADC here: it is not calibrated until
+    // arming, but stage 0 must still see its noise floor - it is the analog
+    // channel and the one that can pick up slip-ring modulation.
+    if (logKind == LOG_NOISE || logKind == LOG_SWING)
+      serviceLog(rawAngleA_deg(), 0.0f);
     else {
       static unsigned long lastIdle = 0;
       if (millis() - lastIdle >= 1000) {
@@ -251,7 +261,7 @@ void loop() {
   float elec = wrap360(sensorDir * pos * POLE_PAIRS);
   writePhases(wrap360(elec + (cmd >= 0 ? 90.0f : -90.0f)), (int)fabsf(cmd));
 
-  if (logKind != LOG_NONE) serviceLog(vSigned);
+  if (logKind != LOG_NONE) serviceLog(contAngle - offsetDeg, vSigned);
   else {
     static unsigned long lastPrint = 0;
     if (now - lastPrint >= 400) {
@@ -286,11 +296,11 @@ void startLog(LogKind k, unsigned long secs) {
   lastLogUs = micros();
   Serial.print("# TEST,");    Serial.println(logName(k));
   Serial.print("# DURATION_S,"); Serial.println(secs);
-  Serial.println("# columns: t_s,pivot_deg,pivot_dps,wheel_dps,duty");
-  Serial.println("t_s,pivot_deg,pivot_dps,wheel_dps,duty");
+  Serial.println("# columns: t_s,pivot_deg,pivot_dps,wheel_deg,wheel_dps,duty");
+  Serial.println("t_s,pivot_deg,pivot_dps,wheel_deg,wheel_dps,duty");
 }
 
-void serviceLog(float wheelDps) {
+void serviceLog(float wheelDeg, float wheelDps) {
   unsigned long nowUs = micros();
   if (nowUs - lastLogUs < LOG_PERIOD_US) return;
   lastLogUs = nowUs;
@@ -299,6 +309,7 @@ void serviceLog(float wheelDps) {
   Serial.print((now - logStart) / 1000.0f, 4); Serial.print(',');
   Serial.print(pivotAngle(), 3);               Serial.print(',');
   Serial.print(pivotVel, 2);                   Serial.print(',');
+  Serial.print(wheelDeg, 3);                   Serial.print(',');
   Serial.print(wheelDps, 1);                   Serial.print(',');
   Serial.println((int)lastCmd);
 }
@@ -311,6 +322,11 @@ void endLog() {
 }
 
 // ---------------------------------------------------------------- sensors
+
+float rawAngleA_deg() {
+  // Uncalibrated scale - noise-floor use only, never for commutation.
+  return analogRead(PIN_SENSOR_OUT) * 360.0f / NOMINAL_SPAN_COUNTS;
+}
 
 float readAngleA() {
   if (!calibrated) return -1;

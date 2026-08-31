@@ -34,16 +34,17 @@ B_W = 1.0e-4             # wheel bearing friction (N*m*s/rad)
 RESISTANCE, RAIL, PWM = 10.0, 12.0, 1023.0
 NOISE_PIVOT_DEG = 0.09   # ~1 LSB of a 12-bit encoder
 NOISE_WHEEL_DPS = 3.0
+NOISE_WHEEL_DEG = 0.30   # analog channel: 1-2 bits lost to noise
 DT = 0.005               # 200 Hz, matching the firmware's log rate
 
 
-def _write(out: Path, name: str, kind: str, t, piv, dps, whl, duty) -> None:
+def _write(out: Path, name: str, kind: str, t, piv, dps, wdeg, whl, duty) -> None:
     with (out / name).open("w") as f:
         f.write(f"# TEST,{kind}\n# DURATION_S,{t[-1]:.0f}\n")
-        f.write("t_s,pivot_deg,pivot_dps,wheel_dps,duty\n")
+        f.write("t_s,pivot_deg,pivot_dps,wheel_deg,wheel_dps,duty\n")
         for i in range(len(t)):
             f.write(f"{t[i]:.4f},{piv[i]:.3f},{dps[i]:.2f},"
-                    f"{whl[i]:.1f},{int(duty[i])}\n")
+                    f"{wdeg[i]:.3f},{whl[i]:.1f},{int(duty[i])}\n")
 
 
 def main() -> None:
@@ -61,7 +62,7 @@ def main() -> None:
     z = np.zeros_like(t)
     _write(out, "00_noise.csv", "noise", t,
            rng.normal(0, NOISE_PIVOT_DEG, t.size), z,
-           rng.normal(0, NOISE_WHEEL_DPS, t.size), z)
+           rng.normal(0, NOISE_WHEEL_DEG, t.size), z, z)
 
     # stage 1 - free swing about the hanging equilibrium
     t = np.arange(0, 20, DT)
@@ -73,7 +74,8 @@ def main() -> None:
         th += om * DT
     _write(out, "01_freeswing.csv", "freeswing", t,
            np.array(piv) + rng.normal(0, NOISE_PIVOT_DEG, t.size),
-           np.array(dps), np.zeros_like(t), np.zeros_like(t))
+           np.array(dps), np.zeros_like(t), np.zeros_like(t),
+           np.zeros_like(t))
 
     # stage 2 - wheel spin-up then coast
     t = np.arange(0, 8, DT)
@@ -85,6 +87,7 @@ def main() -> None:
         v = duty[k] / PWM * RAIL
         w += ((K_T * v / RESISTANCE - (b_emf + B_W) * w) / J_W) * DT
     _write(out, "02_spin.csv", "spin", t, np.zeros_like(t), np.zeros_like(t),
+           np.zeros_like(t),
            np.array(whl) + rng.normal(0, NOISE_WHEEL_DPS, t.size), duty)
 
     # stage 3 - torque pulse on the hanging arm
@@ -99,7 +102,7 @@ def main() -> None:
         th += om * DT
     _write(out, "03_pulse.csv", "pulse", t,
            np.array(piv) + rng.normal(0, NOISE_PIVOT_DEG, t.size),
-           np.array(dps), np.zeros_like(t), duty)
+           np.array(dps), np.zeros_like(t), np.zeros_like(t), duty)
 
     print(f"wrote 4 captures to {out}\n")
     print("TRUTH — identify_parameters.py should recover these:")
@@ -107,8 +110,10 @@ def main() -> None:
     print(f"  pivot_friction        {B_P:.6g}")
     print(f"  torque_constant       {K_T:.6g}")
     print(f"  wheel friction_coeff  {B_W:.6g}")
-    print(f"  measurement_std       [{math.radians(NOISE_PIVOT_DEG):.3g}, "
-          f"{math.radians(NOISE_WHEEL_DPS):.3g}]")
+    print(f"  pivot angle noise     {math.radians(NOISE_PIVOT_DEG):.3g} rad "
+          f"({NOISE_PIVOT_DEG} deg)")
+    print(f"  wheel angle noise     {math.radians(NOISE_WHEEL_DEG):.3g} rad "
+          f"({NOISE_WHEEL_DEG} deg)")
 
 
 if __name__ == "__main__":
