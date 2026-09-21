@@ -27,6 +27,7 @@ noted per script) and `-o OUTDIR`.
 | [`stability_margins.py`](../../scripts/stability_margins.py) | **How much delay / gain error can the real loop survive before it falls?** | Bode of $L=GK$ |
 | [`swing_up.py`](../../scripts/swing_up.py) | Can it get from *hanging* to upright, and will the LQG catch it? | nonlinear, global |
 | [`evaluation_noise.py`](../../scripts/evaluation_noise.py) | How repeatable is one cost evaluation — how much noise must the BO absorb? | BO, diagnostics |
+| [`ard_relevance.py`](../../scripts/ard_relevance.py) | Which of the 11 LQG weights does the cost actually depend on? | BO, diagnostics |
 
 The first three are the **optimisation** story (covered in
 [running_experiments.md](running_experiments.md) and
@@ -60,6 +61,17 @@ noise* the surrogate models directly (`optimization.md` §1): on the measured
 build the cost has a ~20 % CV, almost all of it settling-time scatter — which is
 why the optimiser reports the posterior-mean minimiser, not the best single
 sample.
+
+### `ard_relevance.py` — which weights matter?
+Evaluates a space-filling design over the search box, fits the GP once with
+ML-II, and reads the **ARD lengthscales** (`optimization.md` §2–3): a short
+lengthscale means the cost is sensitive to that weight, a long one means it is
+nearly flat. On the measured build the cost depends most on the LQR weights on
+the *reaction-wheel* states and on `R`, while the pendulum-angle weight comes out
+nearly irrelevant — so the effective problem is lower-dimensional than 11-D. It
+also exposes a modelling pitfall the script warns about: below ~120 averaged
+design points the ML-II fit is degenerate (drives `σ_n → 0` and inflates the
+irrelevant lengthscales), so the ranking is an indication, not a precise number.
 
 ### `frequency_analysis.py` — the plant's Bode diagram
 Draws one Bode diagram per input→output channel of the **open-loop plant** $G$.

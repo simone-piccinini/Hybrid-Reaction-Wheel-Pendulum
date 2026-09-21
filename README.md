@@ -126,7 +126,8 @@ numerics → core → physical → dynamics → control ┐
 │   ├── step_response.py           closed-loop poles & transient metrics
 │   ├── stability_margins.py       gain/phase margins of the LQG loop
 │   ├── swing_up.py                hanging → upright, then LQG catch
-│   └── evaluation_noise.py        cost-evaluation noise at a fixed controller
+│   ├── evaluation_noise.py        cost-evaluation noise at a fixed controller
+│   └── ard_relevance.py           which LQG weights the cost is sensitive to
 ├── docs/
 │   ├── theory/                 the derivations each layer implements
 │   ├── guides/                 practical walkthroughs (start here)
@@ -279,6 +280,17 @@ we expected:
   not exploration, which is *why* the surrogate carries an observation-noise term
   and the reported answer is the posterior-mean minimiser, not the lowest
   observed sample.
+- **Not all 11 weights matter — and the pendulum-angle weight isn't one that
+  does.** The GP's ARD lengthscales rank how sensitive the cost is to each weight
+  ([`scripts/ard_relevance.py`](scripts/ard_relevance.py)). The dominant knobs are
+  the LQR weights on the **reaction-wheel states** (`Q·θ̇w`, `Q·θw`) and the
+  **control-effort weight `R`**; several weights — including, surprisingly, the
+  weight on the pendulum angle itself — come out nearly flat, so the search is
+  effectively lower-dimensional than 11-D. A methodological catch came with it:
+  on this noisy cost the ML-II fit is **degenerate below ~120 averaged
+  evaluations** (it drives `σ_n → 0` and inflates the irrelevant lengthscales to
+  ~1e17, interpolating the noise), so the ranking is a budget-hungry *indication*,
+  not a precise measurement.
 - **The posterior mean, not the best sample, is the right answer — and at this
   budget it is still moving.** The best design showed up on evaluation 28 of 28;
   with an 11-D search and ~28 evaluations, the reported optimum and the luckiest
