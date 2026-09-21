@@ -5,6 +5,9 @@ the [identified-plant analysis](../../docs/papers/robustness_lqg_identified.md)
 and the [sensor characterisation](../../docs/hardware/sensor_characterisation.md)
 are written about.
 
+The pendulum body was designed in CAD (**Onshape**), together with the reaction
+wheel ([reaction_wheel_design.md](../../docs/hardware/reaction_wheel_design.md)).
+
 **Current state in one line:** the mechanics and electronics work and the plant
 parameters check out against CAD — but the **pivot angle sensor is mounted too
 loosely**, and its out-of-plane wobble is now the single thing standing between
@@ -51,9 +54,15 @@ goes negative (−21.2°)** and the bring-up robustness gate correctly refuses t
 the build attempt balancing. The full argument is in
 [robustness_lqg_identified.md](../../docs/papers/robustness_lqg_identified.md).
 
-**The fix is mechanical, not in software:** a rigid pivot-sensor mount that holds
-the magnet co-axial and kills the out-of-plane wobble at the source. That is the
-next build change — not another tuning run.
+**The fix is mechanical, not in software.** Next steps, in order:
+
+1. **Redesign the pivot-sensor mount in CAD (Onshape)** *around how sensitive the
+   AS5600 is* to air-gap and alignment — a rigid bracket that holds the board and
+   its magnet co-axial and kills the out-of-plane wobble at the source.
+2. **A stiffer body, more resilient to vibration**, so the arm's oscillation does
+   not couple into the sensors as noise.
+3. **Swing-up on hardware** — feasible in simulation at the measured `b_p`
+   (2.34 s, then the LQG catches it) — once the sensing is fixed.
 
 ---
 

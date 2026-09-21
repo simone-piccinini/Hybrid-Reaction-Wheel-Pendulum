@@ -9,10 +9,10 @@ design that balances best.
 
 ## Current state — the first build
 
-The machine is built and the [identified](configs/pendulum_identified.yaml) plant
-parameters check out against CAD (`I_b` to 1 %) — but it is **not balancing yet**,
-for one concrete, locatable reason: the **pivot angle sensor is mounted too
-loosely.**
+The pendulum body was designed in CAD (**Onshape**) and the machine is built; the
+[identified](configs/pendulum_identified.yaml) plant parameters check out against
+CAD (`I_b` to 1 %). But it is **not balancing yet**, for one concrete, locatable
+reason: the **pivot angle sensor is mounted too loosely.**
 
 <p align="center">
   <img src="build/first_build/all.jpeg" width="340" alt="The complete first build"><br>
@@ -23,7 +23,7 @@ loosely.**
 <tr>
 <td align="center" width="33%"><img src="build/first_build/wheel.jpeg" width="230" alt="reaction wheel"><br><sub>the printed PLA reaction wheel</sub></td>
 <td align="center" width="33%"><img src="build/first_build/sensor.jpeg" width="230" alt="motor and wheel encoder"><br><sub>motor + wheel-side encoder (fine)</sub></td>
-<td align="center" width="33%"><img src="build/first_build/tetha_sensor.jpeg" width="230" alt="pivot sensor, the problem"><br><sub><b>pivot θ sensor — the problem</b></sub></td>
+<td align="center" width="33%"><img src="build/first_build/tetha_sensor.jpeg" width="230" alt="pivot angle sensor"><br><sub><b>pivot θ sensor</b></sub></td>
 </tr>
 </table>
 
@@ -36,6 +36,24 @@ to proceed. **The fix is mechanical — a rigid sensor mount — not another tun
 run.** More photos and the full story in
 [`build/first_build/`](build/first_build/); the analysis is
 [`docs/papers/robustness_lqg_identified.md`](docs/papers/robustness_lqg_identified.md).
+
+## Next steps
+
+The plant is understood; the open work is mechanical first, then hardware:
+
+1. **A rigid pivot-sensor mount, designed in CAD.** Redesign the AS5600 mount in
+   Onshape *around how sensitive the encoder is* to air-gap and alignment —
+   holding the board and its diametric magnet co-axial so the out-of-plane wobble
+   (the source of the −21.2° phase margin) is removed at the mechanism, not
+   patched in software.
+2. **A stiffer body, more resilient to vibration.** Redesign the pendulum
+   structure to be more rigid and to damp its own oscillation, so its vibration
+   does not couple into the sensors as measurement noise — the non-white
+   disturbance the Kalman filter cannot cleanly reject.
+3. **Swing-up on hardware.** Bring the energy-shaping swing-up — feasible in
+   simulation at the measured `b_p` (2.34 s pump-up, then the LQG catches it;
+   [`docs/theory/swingup.md`](docs/theory/swingup.md)) — to the real arm once the
+   sensing is fixed.
 
 ## Relation to prior work
 
