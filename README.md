@@ -272,6 +272,26 @@ dominates; Entropy Search buys reliability, at ~20 % more compute.
 
 ---
 
+## The physical build — and where it stands
+
+The first build exists on the bench. The mechanics and electronics work, and the
+[identified](configs/pendulum_identified.yaml) plant parameters check out against
+CAD (`I_b` to 1 %) — but it is **not yet ready to balance**, for a concrete and
+locatable reason: the **pivot angle sensor is mounted too loosely.**
+
+![The complete first build](build/first_build/all.jpeg)
+
+The pendulum-angle AS5600 is held by tape and a paper shim, so out-of-plane
+motion of the arm moves the reading by ±4.6° at a *fixed* true angle — a 2.63°
+(1σ), non-white disturbance on the one signal the controller feeds back on. That
+noise, not the plant, is what drives the achievable phase margin **negative
+(−21.2°)**, and the bring-up robustness gate correctly refuses to proceed. The
+fix is **mechanical** — a rigid sensor mount — not another tuning run. Photos and
+the full story: [`build/first_build/`](build/first_build/), with the analysis in
+[`docs/papers/robustness_lqg_identified.md`](docs/papers/robustness_lqg_identified.md).
+
+---
+
 ## What we learned
 
 The findings that shaped the project — including the ones that did not go the way
