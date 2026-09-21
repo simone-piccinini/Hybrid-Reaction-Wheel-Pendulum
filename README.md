@@ -125,7 +125,8 @@ numerics → core → physical → dynamics → control ┐
 │   ├── frequency_analysis.py      Bode diagrams of the open-loop plant
 │   ├── step_response.py           closed-loop poles & transient metrics
 │   ├── stability_margins.py       gain/phase margins of the LQG loop
-│   └── swing_up.py                hanging → upright, then LQG catch
+│   ├── swing_up.py                hanging → upright, then LQG catch
+│   └── evaluation_noise.py        cost-evaluation noise at a fixed controller
 ├── docs/
 │   ├── theory/                 the derivations each layer implements
 │   ├── guides/                 practical walkthroughs (start here)
@@ -269,11 +270,15 @@ dominates; Entropy Search buys reliability, at ~20 % more compute.
 The findings that shaped the project — including the ones that did not go the way
 we expected:
 
-- **The cost evaluations are genuinely noisy.** The blue scatter in the
-  convergence plot is not exploration — it is the same-ish controller scoring
-  ~1000 to ~1560 across rollouts. This is *why* the surrogate is modelled with an
-  observation-noise term and the answer is the posterior-mean minimiser, not the
-  lowest observed point.
+- **The cost evaluations are genuinely noisy — a ~20 % coefficient of
+  variation.** Re-scoring the tuned controller over 50 seeds
+  ([`scripts/evaluation_noise.py`](scripts/evaluation_noise.py)) gives a cost of
+  **979 ± 196** (range 362–1213), and that spread is almost entirely
+  settling-time scatter (T_s = 8.6 ± 1.4 s, 16 % CV) — the overshoot barely
+  moves (2.5 % CV). So the blue scatter in the convergence plot is that noise,
+  not exploration, which is *why* the surrogate carries an observation-noise term
+  and the reported answer is the posterior-mean minimiser, not the lowest
+  observed sample.
 - **The posterior mean, not the best sample, is the right answer — and at this
   budget it is still moving.** The best design showed up on evaluation 28 of 28;
   with an 11-D search and ~28 evaluations, the reported optimum and the luckiest

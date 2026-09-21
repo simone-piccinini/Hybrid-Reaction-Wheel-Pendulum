@@ -26,6 +26,7 @@ noted per script) and `-o OUTDIR`.
 | [`step_response.py`](../../scripts/step_response.py) | How does the **closed loop** move in time — poles, overshoot, settling? | time domain |
 | [`stability_margins.py`](../../scripts/stability_margins.py) | **How much delay / gain error can the real loop survive before it falls?** | Bode of $L=GK$ |
 | [`swing_up.py`](../../scripts/swing_up.py) | Can it get from *hanging* to upright, and will the LQG catch it? | nonlinear, global |
+| [`evaluation_noise.py`](../../scripts/evaluation_noise.py) | How repeatable is one cost evaluation — how much noise must the BO absorb? | BO, diagnostics |
 
 The first three are the **optimisation** story (covered in
 [running_experiments.md](running_experiments.md) and
@@ -50,6 +51,15 @@ Runs the same problem under Expected Improvement, UCB, and Entropy Search across
 several seeds and reports mean/spread of the best cost, the fraction of runs
 whose reported optimum actually stabilises the plant, and wall-clock time.
 Entropy Search is the project goal; EI and UCB are the baselines.
+
+### `evaluation_noise.py` — how noisy is one score?
+Fixes one controller (the tuned optimum from a run's `metadata.json`) and
+re-evaluates it over many seeds, reporting the mean, spread, and coefficient of
+variation of the cost and the headline metrics. This measures the *observation
+noise* the surrogate models directly (`optimization.md` §1): on the measured
+build the cost has a ~20 % CV, almost all of it settling-time scatter — which is
+why the optimiser reports the posterior-mean minimiser, not the best single
+sample.
 
 ### `frequency_analysis.py` — the plant's Bode diagram
 Draws one Bode diagram per input→output channel of the **open-loop plant** $G$.
