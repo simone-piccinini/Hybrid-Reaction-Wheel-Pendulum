@@ -1,41 +1,38 @@
 # Hybrid Reaction-Wheel Pendulum
 
+**Automatic tuning of a full LQG controller for an inverted reaction-wheel
+pendulum, by Gaussian-process Bayesian optimisation with Entropy Search — every
+algorithm written from scratch.** A candidate controller is scored by simulating
+the closed loop; the optimiser treats "build the LQG, run it, score the
+trajectory" as an expensive black box and searches the weight space for the
+design that balances best.
 
-## Project Goals
+## Relation to prior work
 
-This project has three main goals:
+This implements and **extends** Marco, Hennig, Bohg, Schaal & Trimpe, *"Automatic
+LQR Tuning Based on Gaussian Process Global Optimization"* (ICRA 2016,
+[arXiv:1605.01950](https://arxiv.org/abs/1605.01950)), which tunes LQR weights on
+a robot arm with a GP surrogate and Entropy Search. The three deliberate
+differences:
 
-- **1)** Show the pipeline and the base theory of controlling an inversed wheeled pendulum controlled by a LQR + Kalman Filter.
-- **2)** Tuning the hyperparameters of the controller using advanced methods of optimization (bayesian optimization throught entropy search)
-- **3)** Bringing the project to life, hardware decisions, construction of the body, and result.
+| Marco et al. (2016) | This project |
+|---|---|
+| LQR only — tune `(Q, R)` | full **LQG** — tune `(Q, R)` *and* the Kalman covariances `(W, V)`: an **11-D** search |
+| seven-DOF arm + inverted pole | inverted **reaction-wheel pendulum** (the real bench build) |
+| hardware experiments as evaluations | seeded, reproducible **simulation rollouts** |
+| GP / Entropy Search from research libraries | **everything from scratch** — GP, ML-II, kernels, Entropy Search, Riccati, the lot |
 
----
-## Inspiration
+Adding the Kalman filter is the substantive step: it turns the problem from tuning
+a state-feedback gain into tuning a full output-feedback estimator+controller,
+and — as the robustness study below shows — reintroduces the LQG margin fragility
+Marco et al. never had to confront (Doyle 1978).
 
-The idea for creating this project came studying from the course **CMU Optimal Control 16-745**.
-
-- **Course:** CMU Optimal Control 16-745
-- **Instructor:** Zachary Manchester
-- **Website:** https://optimalcontrol.ri.cmu.edu/
-
-So many of the proofs and theoretical results are taken from the course taught by Zachary Manchester.
-
----
-
-## Optimization
-
-For the optimization part of the project, I decided to take this route after having read the paper:
-
-- **Entropy Search for Information-Efficient Global Optimization**
-  - Philipp Hennig and Christian J. Schuler
-
-I decided to use this method because it's less computationally expensive than the classical optimization method and it has been proven to bring good result, especially on the paper:
-
-- **Automatic LQR Tuning Based on Gaussian Process Global Optimization**
-  - Alonso Marco, Philipp Hennig, Jeannette Bohg, Stefan Schaal, and Sebastian Trimpe
-
-Which shows how to tune an LQR controller automatically using entropy search for global optimization.
-
+**Project goals.** (1) implement the LQR + Kalman (LQG) control pipeline and its
+theory from first principles; (2) auto-tune its weights by GP Bayesian
+optimisation with Entropy Search; (3) bring it to hardware — build, measure,
+identify, and balance. Grounded in **CMU 16-745 *Optimal Control*** (Z. Manchester,
+[optimalcontrol.ri.cmu.edu](https://optimalcontrol.ri.cmu.edu/)); the acquisition
+is from Hennig & Schuler (2012).
 
 ## No library that solves the problem
 
@@ -206,6 +203,18 @@ PYTHONPATH=src python -m pytest tests/ -q      # 577 tests
 
 ## Results on the measured build
 
+**Tuning convergence.** One run on the real bench plant, Entropy Search, 28
+evaluations (8 Latin-hypercube seeds + 20 acquisition steps):
+
+![Bayesian-optimisation convergence on the measured build](results/measured/convergence.png)
+
+The green staircase is the best closed-loop cost found so far; each blue dot is
+one evaluation. The blue scatter *is* the evaluation noise — nominally similar
+controllers cost anywhere from ~1000 to ~1560, because every rollout realises
+fresh process/measurement noise and a random initial tilt. Note the best design
+appears only on the **last** of 28 evaluations: at this budget and dimension the
+search is still improving when it stops (see *What we learned*).
+
 **Balancing.** Tuning the real bench plant
 ([`configs/pendulum_measured.yaml`](configs/pendulum_measured.yaml)) finds an
 LQG that stabilises a 0.05 rad tilt in ~0.3 s at a ~7 V peak on the 12 V rail,
@@ -232,8 +241,60 @@ placeholder pivot friction (`b_p = 0.01` caps the energy pump below what the
 pendulum pumps up over ~4 swings and the LQG catches it in 2.82 s to 0.00°.
 Theory: [`docs/theory/swingup.md`](docs/theory/swingup.md).
 
-An empirical comparison of the three acquisition functions is in
-[`docs/guides/experiments.md`](docs/guides/experiments.md).
+**Entropy Search vs. baselines.** A result compared against a baseline is worth
+more than a result alone, so the same tuning problem is run under Entropy Search
+and two standard acquisitions — Expected Improvement and UCB — across five seeds
+([`scripts/compare_acquisitions.py`](scripts/compare_acquisitions.py),
+[`docs/guides/experiments.md`](docs/guides/experiments.md)):
+
+| Acquisition | best cost (mean ± std) | best cost (min) | stabilised* | wall-clock |
+|---|---|---|---|---|
+| **Entropy Search** | **25.6 ± 2.6** | 22.3 | 80 % | 17.1 s |
+| Expected Improvement | 28.4 ± 6.5 | 21.7 | 100 % | 14.5 s |
+| UCB | 25.0 ± 3.8 | 20.1 | 60 % | 14.3 s |
+
+<sub>*fraction of seeds whose reported optimum actually stabilises the plant.</sub>
+
+The honest read: **Entropy Search's edge here is consistency, not a lower floor.**
+It has the smallest spread across seeds (± 2.6 vs EI's ± 6.5) and beats EI on
+the mean, which matches its information-efficient design — but UCB reaches a
+marginally lower single-seed best, and *Expected Improvement more often returns a
+stabilising controller*. On this low-budget, 11-D problem no acquisition
+dominates; Entropy Search buys reliability, at ~20 % more compute.
+
+---
+
+## What we learned
+
+The findings that shaped the project — including the ones that did not go the way
+we expected:
+
+- **The cost evaluations are genuinely noisy.** The blue scatter in the
+  convergence plot is not exploration — it is the same-ish controller scoring
+  ~1000 to ~1560 across rollouts. This is *why* the surrogate is modelled with an
+  observation-noise term and the answer is the posterior-mean minimiser, not the
+  lowest observed point.
+- **The posterior mean, not the best sample, is the right answer — and at this
+  budget it is still moving.** The best design showed up on evaluation 28 of 28;
+  with an 11-D search and ~28 evaluations, the reported optimum and the luckiest
+  observation can differ, and the search has not converged. Small-budget,
+  high-dimensional BO is the honest framing of what this tunes.
+- **Acquisition choice mattered less than expected.** Entropy Search wins on
+  *variance*, not on the best value (table above) — a more sober result than "our
+  acquisition is best," and the more useful one.
+- **LQG reintroduces a robustness trap that LQR tuning never had (Doyle 1978).**
+  The tuner happily returned a controller with an 11.6° phase margin (~57 ms of
+  latency budget). Nothing in the cost had asked for robustness — so we added a
+  margin penalty, which roughly doubled the delay budget
+  ([`docs/papers/robustness_lqg_measured.md`](docs/papers/robustness_lqg_measured.md) §7).
+- **The biggest surprise came from hardware.** Measuring the pivot friction gave
+  `b_p = 2.7e-4` — **37× smaller** than the placeholder guess — which flips
+  swing-up from infeasible to comfortable *and* validates the CAD inertia to 1 %.
+  But removing 37× of assumed friction removes 37× of free damping the loop had
+  been leaning on: phase margin went **negative** on every tuning that includes
+  the measured pivot-encoder noise. The binding constraint turned out to be the
+  **sensor**, not the plant parameters — the kind of thing only a real build
+  tells you.
 
 ---
 
