@@ -81,6 +81,11 @@ start with the **codebase overview**, then dip into theory or guides as needed.
   — a stability-margin study of the BO-tuned controller for the real,
   CAD/measured pendulum: gain-robust (6.85 dB, +120 %) but delay-fragile (11.6°,
   ~57 ms), with Doyle's caveat and what it means for the firmware.
+- [Robustness of the Tuned LQG on the Identified Plant](papers/robustness_lqg_identified.md)
+  — the sequel, on the *hardware-measured* pendulum: identification validates the
+  model (`I_b` to 1 %) and unlocks swing-up (`b_p` 37× smaller), but the measured
+  pivot-encoder noise drives phase margin **negative** (−21.2°) — the binding
+  constraint is now the sensor, not the physics, and the bring-up gate fails.
 
 ## Theory (the derivations each layer implements)
 

@@ -67,5 +67,11 @@ The binding derivation is [`docs/theory/optimization.md`](../theory/optimization
   and what that means for the firmware. §7 adds the A/B of the margin penalty
   the study motivated: with the term on, the delay budget roughly doubles
   (57 → 108 ms) — a directional win, reported with its shortfalls.
+- [**Robustness of the Tuned LQG on the Identified Plant**](robustness_lqg_identified.md)
+  — the sequel, on the *hardware-measured* build. Identification validates the
+  model (`I_b` to 1 %) and unlocks swing-up (`b_p` 37× smaller than the guess),
+  but the measured pivot-encoder noise (2.63°, non-white) drives the achievable
+  phase margin **negative** (−21.2°). The binding constraint moves from the
+  physics to the sensor, and the bring-up robustness gate correctly fails.
 - [Acquisition-function comparison](../guides/experiments.md) — Entropy Search
   vs Expected Improvement vs UCB on the same tuning problem, multi-seed.
