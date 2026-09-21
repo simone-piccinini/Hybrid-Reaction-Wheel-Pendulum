@@ -314,10 +314,11 @@ we expected:
   `b_p = 2.7e-4` — **37× smaller** than the placeholder guess — which flips
   swing-up from infeasible to comfortable *and* validates the CAD inertia to 1 %.
   But removing 37× of assumed friction removes 37× of free damping the loop had
-  been leaning on: phase margin went **negative** on every tuning that includes
-  the measured pivot-encoder noise. The binding constraint turned out to be the
-  **sensor**, not the plant parameters — the kind of thing only a real build
-  tells you.
+  been leaning on: phase margin went **negative** (−21.2°) on every tuning that
+  includes the measured pivot-encoder noise. The binding constraint turned out to
+  be the **sensor**, not the plant parameters — the kind of thing only a real
+  build tells you. The full analysis is
+  [`docs/papers/robustness_lqg_identified.md`](docs/papers/robustness_lqg_identified.md).
 
 ---
 

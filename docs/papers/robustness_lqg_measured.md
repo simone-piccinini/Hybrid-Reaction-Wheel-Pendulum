@@ -10,6 +10,11 @@ and its **gain/phase margins** (the method and theory: [the analysis-scripts
 guide](../guides/analysis_scripts.md) and [frequency_analysis.md
 §7](../guides/frequency_analysis.md#7-the-experts-plot-open-loop-gain-and-stability-margins)).
 
+> **Sequel.** This study is on the *CAD/measured* plant. Once the plant was
+> measured on hardware, the picture changed — the parameters validated but the
+> real sensor noise drove the margin negative. See
+> [Robustness on the Identified Plant](robustness_lqg_identified.md).
+
 ---
 
 ## 1. Summary
