@@ -257,6 +257,12 @@ and two standard acquisitions — Expected Improvement and UCB — across five s
 
 <sub>*fraction of seeds whose reported optimum actually stabilises the plant.</sub>
 
+![Best-cost-so-far vs evaluation for the three acquisitions](results/acquisition_comparison.png)
+
+All three share the same seeded initial design (they overlap until the dashed
+line), then the acquisition takes over. The min–max bands overlap heavily — a
+faithful picture of the table below.
+
 The honest read: **Entropy Search's edge here is consistency, not a lower floor.**
 It has the smallest spread across seeds (± 2.6 vs EI's ± 6.5) and beats EI on
 the mean, which matches its information-efficient design — but UCB reaches a

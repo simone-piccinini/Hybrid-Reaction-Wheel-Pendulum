@@ -51,7 +51,10 @@ comparison.
 Runs the same problem under Expected Improvement, UCB, and Entropy Search across
 several seeds and reports mean/spread of the best cost, the fraction of runs
 whose reported optimum actually stabilises the plant, and wall-clock time.
-Entropy Search is the project goal; EI and UCB are the baselines.
+Entropy Search is the project goal; EI and UCB are the baselines. `--plot PNG`
+writes a best-cost-so-far-vs-evaluation overlay (mean ± min–max band per
+acquisition); `--from-json PATH` re-builds the table and figure from a saved run
+without recomputing (e.g. re-plot `results/acquisition_comparison.json`).
 
 ### `evaluation_noise.py` — how noisy is one score?
 Fixes one controller (the tuned optimum from a run's `metadata.json`) and
