@@ -66,6 +66,82 @@ def run_one(base_config, kind: str, params: dict, seed: int) -> dict:
     }
 
 
+PRETTY = {
+    "entropy_search": "Entropy Search",
+    "expected_improvement": "Expected Improvement",
+    "ucb": "UCB",
+}
+COLORS = {
+    "entropy_search": "tab:blue",
+    "expected_improvement": "tab:orange",
+    "ucb": "tab:green",
+}
+
+
+def _detect_n_initial(records: list[dict]) -> int | None:
+    """The shared initial-design length: the leading evals identical across
+    acquisitions for one seed (the BO samples the same seeded design before the
+    acquisition takes over). Returns None if they differ from the first eval."""
+    seed = records[0]["seed"]
+    histories = [np.asarray(r["history_y"]) for r in records if r["seed"] == seed]
+    if len(histories) < 2:
+        return None
+    ref = histories[0]
+    for k in range(len(ref)):
+        if not all(np.isclose(h[k], ref[k]) for h in histories):
+            return k or None
+    return None
+
+
+def _plot_convergence(records: list[dict], out_path: Path) -> None:
+    """Overlay best-cost-so-far vs evaluation for each acquisition (mean ± range)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+    for kind in ACQUISITIONS:
+        rows = [r for r in records if r["kind"] == kind]
+        if not rows:
+            continue
+        # best-so-far per seed, then aggregate across seeds
+        curves = np.array([np.minimum.accumulate(r["history_y"]) for r in rows])
+        evals = np.arange(1, curves.shape[1] + 1)
+        mean, lo, hi = curves.mean(0), curves.min(0), curves.max(0)
+        ax.plot(evals, mean, color=COLORS[kind], lw=2.2, label=PRETTY[kind])
+        ax.fill_between(evals, lo, hi, color=COLORS[kind], alpha=0.15)
+
+    n_init = _detect_n_initial(records)
+    if n_init:
+        ax.axvline(n_init + 0.5, color="grey", ls="--", lw=1.0)
+        ax.text(n_init + 0.7, ax.get_ylim()[1], "acquisition begins",
+                rotation=90, va="top", ha="left", fontsize=8, color="grey")
+
+    ax.set_yscale("log")
+    ax.set_xlabel("evaluation")
+    ax.set_ylabel("best closed-loop cost so far (log)")
+    ax.set_title(f"Acquisition convergence — mean over "
+                 f"{len({r['seed'] for r in records})} seeds (band = min–max)")
+    ax.grid(alpha=0.25, which="both")
+    ax.legend()
+    fig.tight_layout()
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(out_path, dpi=120)
+    plt.close(fig)
+    print(f"\nConvergence figure written to {out_path}")
+
+
+def _print_summary(summary: dict) -> None:
+    """Print the best-observed-cost table (shared by the sweep and replay paths)."""
+    print("\n=== summary (best observed cost, lower is better) ===")
+    print(f"{'acquisition':22s} {'mean':>8s} {'std':>8s} {'min':>8s} "
+          f"{'stab.':>6s} {'sec':>6s}")
+    for kind, s in summary.items():
+        print(f"{kind:22s} {s['best_observed_mean']:8.3f} "
+              f"{s['best_observed_std']:8.3f} {s['best_observed_min']:8.3f} "
+              f"{s['reported_stabilised_fraction']:6.2f} {s['mean_seconds']:6.1f}")
+
+
 def summarise(records: list[dict]) -> dict:
     """Aggregate per-acquisition statistics over seeds."""
     summary = {}
@@ -91,7 +167,21 @@ def main() -> None:
     parser.add_argument("--n-iterations", type=int, default=12)
     parser.add_argument("--sim-time", type=float, default=4.0)
     parser.add_argument("--json", default=None, help="write the summary JSON here")
+    parser.add_argument("--plot", default=None,
+                        help="write the convergence overlay figure (PNG) here")
+    parser.add_argument("--from-json", default=None,
+                        help="skip the sweep; load records from this JSON "
+                             "(e.g. re-plot results/acquisition_comparison.json)")
     args = parser.parse_args()
+
+    # replay mode: rebuild the table/figure from a saved run, no re-computation
+    if args.from_json:
+        records = json.loads(Path(args.from_json).read_text())["records"]
+        summary = summarise(records)
+        _print_summary(summary)
+        if args.plot:
+            _plot_convergence(records, Path(args.plot))
+        return
 
     base = load_config(args.config)
     base = dataclasses.replace(
@@ -119,13 +209,7 @@ def main() -> None:
                   f"{record['seconds']:5.1f}s")
 
     summary = summarise(records)
-    print("\n=== summary (best observed cost, lower is better) ===")
-    print(f"{'acquisition':22s} {'mean':>8s} {'std':>8s} {'min':>8s} "
-          f"{'stab.':>6s} {'sec':>6s}")
-    for kind, s in summary.items():
-        print(f"{kind:22s} {s['best_observed_mean']:8.3f} "
-              f"{s['best_observed_std']:8.3f} {s['best_observed_min']:8.3f} "
-              f"{s['reported_stabilised_fraction']:6.2f} {s['mean_seconds']:6.1f}")
+    _print_summary(summary)
 
     if args.json:
         path = Path(args.json)
@@ -133,6 +217,9 @@ def main() -> None:
         with path.open("w") as handle:
             json.dump({"records": records, "summary": summary}, handle, indent=2)
         print(f"\nSummary written to {path}")
+
+    if args.plot:
+        _plot_convergence(records, Path(args.plot))
 
 
 if __name__ == "__main__":
