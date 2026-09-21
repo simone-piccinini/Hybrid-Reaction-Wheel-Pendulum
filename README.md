@@ -7,6 +7,36 @@ the closed loop; the optimiser treats "build the LQG, run it, score the
 trajectory" as an expensive black box and searches the weight space for the
 design that balances best.
 
+## Current state — the first build
+
+The machine is built and the [identified](configs/pendulum_identified.yaml) plant
+parameters check out against CAD (`I_b` to 1 %) — but it is **not balancing yet**,
+for one concrete, locatable reason: the **pivot angle sensor is mounted too
+loosely.**
+
+<p align="center">
+  <img src="build/first_build/all.jpeg" width="340" alt="The complete first build"><br>
+  <sub><b>The complete first build</b> — pendulum arm, reaction wheel, two encoders, ESP32/driver on the breadboard.</sub>
+</p>
+
+<table>
+<tr>
+<td align="center" width="33%"><img src="build/first_build/wheel.jpeg" width="230" alt="reaction wheel"><br><sub>the printed PLA reaction wheel</sub></td>
+<td align="center" width="33%"><img src="build/first_build/sensor.jpeg" width="230" alt="motor and wheel encoder"><br><sub>motor + wheel-side encoder (fine)</sub></td>
+<td align="center" width="33%"><img src="build/first_build/tetha_sensor.jpeg" width="230" alt="pivot sensor, the problem"><br><sub><b>pivot θ sensor — the problem</b></sub></td>
+</tr>
+</table>
+
+The pendulum-angle AS5600 is held by **tape and a paper shim** (right photo), so
+out-of-plane motion of the arm moves the reading by **±4.6° at a *fixed* true
+angle** — a 2.63° (1σ), non-white disturbance on the one signal the controller
+feeds back on. That noise, not the plant, is what drives the achievable phase
+margin **negative (−21.2°)**, and the bring-up robustness gate correctly refuses
+to proceed. **The fix is mechanical — a rigid sensor mount — not another tuning
+run.** More photos and the full story in
+[`build/first_build/`](build/first_build/); the analysis is
+[`docs/papers/robustness_lqg_identified.md`](docs/papers/robustness_lqg_identified.md).
+
 ## Relation to prior work
 
 This implements and **extends** Marco, Hennig, Bohg, Schaal & Trimpe, *"Automatic
@@ -269,26 +299,6 @@ the mean, which matches its information-efficient design — but UCB reaches a
 marginally lower single-seed best, and *Expected Improvement more often returns a
 stabilising controller*. On this low-budget, 11-D problem no acquisition
 dominates; Entropy Search buys reliability, at ~20 % more compute.
-
----
-
-## The physical build — and where it stands
-
-The first build exists on the bench. The mechanics and electronics work, and the
-[identified](configs/pendulum_identified.yaml) plant parameters check out against
-CAD (`I_b` to 1 %) — but it is **not yet ready to balance**, for a concrete and
-locatable reason: the **pivot angle sensor is mounted too loosely.**
-
-![The complete first build](build/first_build/all.jpeg)
-
-The pendulum-angle AS5600 is held by tape and a paper shim, so out-of-plane
-motion of the arm moves the reading by ±4.6° at a *fixed* true angle — a 2.63°
-(1σ), non-white disturbance on the one signal the controller feeds back on. That
-noise, not the plant, is what drives the achievable phase margin **negative
-(−21.2°)**, and the bring-up robustness gate correctly refuses to proceed. The
-fix is **mechanical** — a rigid sensor mount — not another tuning run. Photos and
-the full story: [`build/first_build/`](build/first_build/), with the analysis in
-[`docs/papers/robustness_lqg_identified.md`](docs/papers/robustness_lqg_identified.md).
 
 ---
 
